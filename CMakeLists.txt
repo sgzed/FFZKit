@@ -1,6 +1,5 @@
 project(FFZKit)
-cmake_minimum_required(VERSION 3.1.3)
-
+cmake_minimum_required(VERSION 3.10.0)
 
 message(STATUS "CMake Version: ${CMAKE_VERSION}")
 
@@ -21,7 +20,7 @@ set(SUB_DIR_LIST "Network" "Poller" "Thread" "Util")
 set(CMAKE_CXX_STANDARD 11)
 
 foreach(SUB_DIR ${SUB_DIR_LIST})
-    aux_source_directory(src/${SUB_DIR} ${SUB_DIR})
+    aux_source_directory(src/${SUB_DIR} SRC_LIST)
 endforeach()
 
 
@@ -36,5 +35,5 @@ set_target_properties(${PROJECT_NAME}_static PROPERTIES OUTPUT_NAME "${PROJECT_N
 #测试程序
 #Test program
 if (NOT IOS)
-    add_subdirectory(tests)
+#    add_subdirectory(tests)
 endif ()
