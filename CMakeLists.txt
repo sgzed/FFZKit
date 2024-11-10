@@ -23,6 +23,26 @@ foreach(SUB_DIR ${SUB_DIR_LIST})
     aux_source_directory(src/${SUB_DIR} SRC_LIST)
 endforeach()
 
+if (WIN32)
+    set(LINK_LIB_LIST WS2_32 Iphlpapi shlwapi)
+else ()
+    set(LINK_LIB_LIST)
+endif ()
+
+if (NOT WIN32)
+    add_compile_options(-Wno-deprecated-declarations)
+    add_compile_options(-Wno-predefined-identifier-outside-function)
+endif ()
+
+#编译动态库
+#Compile dynamic library
+if (NOT IOS AND NOT ANDROID AND NOT WIN32)
+    add_library(${PROJECT_NAME}_shared SHARED ${SRC_LIST})
+    target_include_directories(${PROJECT_NAME}_shared PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(${PROJECT_NAME}_shared ${LINK_LIB_LIST})
+    set_target_properties(${PROJECT_NAME}_shared PROPERTIES OUTPUT_NAME "${PROJECT_NAME}")
+    install(TARGETS ${PROJECT_NAME}_shared ARCHIVE DESTINATION ${INSTALL_PATH_LIB} LIBRARY DESTINATION ${INSTALL_PATH_LIB})
+endif ()
 
 #编译静态库
 #Compile static library
@@ -31,9 +51,13 @@ add_library(${PROJECT_NAME}_static STATIC ${SRC_LIST})
 #Reference header file path
 target_include_directories(${PROJECT_NAME}_static PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 set_target_properties(${PROJECT_NAME}_static PROPERTIES OUTPUT_NAME "${PROJECT_NAME}")
+#安装静态库至系统目录
+#Install static library to system directory
+install(TARGETS ${PROJECT_NAME}_static ARCHIVE DESTINATION ${INSTALL_PATH_LIB})
+
 
 #测试程序
 #Test program
 if (NOT IOS)
-#    add_subdirectory(tests)
+    add_subdirectory(tests)
 endif ()

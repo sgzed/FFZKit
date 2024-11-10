@@ -1,8 +1,7 @@
 #ifndef FFZKIT_LIST_H
 #define FFZKIT_LIST_H
 
-#include <list.h>
-
+#include <list>
 
 namespace FFZKit {
 

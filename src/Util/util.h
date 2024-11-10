@@ -3,6 +3,19 @@
 
 #include <string>
 #include <memory>
+#include <vector>
+#include <sstream>
+
+#if defined(_WIN32)
+#undef FD_SETSIZE
+//修改默认64为1024路
+#define FD_SETSIZE 1024
+#include <winsock2.h>
+#pragma comment (lib,"WS2_32")
+#else
+#include <unistd.h>
+#include <sys/time.h>
+#endif // defined(_WIN32)
 
 #define INSTANCE_IMP(class_name, ...) \
 class_name &class_name::Instance() { \
@@ -24,7 +37,22 @@ private:
     noncopyable &operator=(noncopyable &&that) = delete;
 };
 
-    
+
+std::string exePath(bool isExe = true);
+std::string exeDir(bool isExe = true);
+std::string exeName(bool isExe = true);
+
+std::vector<std::string> split(const std::string& s, const char *delim);
+
+/**
+ * 根据unix时间戳获取本地时间
+ * @param sec unix时间戳
+ * @return tm结构体
+ */
+struct tm getLocalTime(time_t sec);
+
+std::string getThreadName();
+
 } // namespace FFZKit
 
 
