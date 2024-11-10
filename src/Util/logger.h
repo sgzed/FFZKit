@@ -158,6 +158,12 @@ private:
     const char *_log_flag = "";
 };
 
+class LoggerWrapper {
+public:
+    //printf style log print
+    static void printLog(Logger &logger, int level, const char *file, const char *function, int line, const char *fmt, ...);
+};
+
 
 //可重置默认值
 extern Logger *g_defaultLogger;

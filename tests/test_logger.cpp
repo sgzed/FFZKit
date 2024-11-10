@@ -1,5 +1,7 @@
 
 #include <iostream>
+#include <thread>
+#include <chrono>
 #include "Util/logger.h"
 
 using namespace std;
@@ -45,5 +47,30 @@ int main(){
     //根据RAII的原理，此处不需要输入 endl，也会在被函数栈pop时打印log
     ErrorL << "without endl!";
 
+    PrintI("测试printf风格打印：");
+    PrintT("this is a %s test:%d", "printf trace", 124);
+    PrintD("this is a %s test:%p", "printf debug", (void*)124);
+    PrintI("this is a %s test:%c", "printf info", 'a');
+    PrintW("this is a %s test:%X", "printf warn", 0x7F);
+    PrintE("this is a %s test:%x", "printf err", 0xab);
+
+
+    for (int i = 0; i < 2; ++i) {
+        DebugL << "this is a repeat 2 times log";
+        this_thread::sleep_for(chrono::milliseconds(10));
+    }
+
+    for (int i = 0; i < 3; ++i) {
+        DebugL << "this is a repeat 3 times log";
+        this_thread::sleep_for(chrono::milliseconds(10));
+    }
+
+    for (int i = 0; i < 100; ++i) {
+        DebugL << "this is a repeat 100 log";
+        this_thread::sleep_for(chrono::milliseconds(10));
+    }
+
+    InfoL << "done!";
+    return 0;
 
 }

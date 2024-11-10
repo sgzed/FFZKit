@@ -1,9 +1,12 @@
 #include <iostream>
+#include <cstdarg>
 #include "logger.h"
 
 using namespace std;
 
 namespace FFZKit {
+
+static const char *LOG_CONST_TABLE[] = {"TRA", "DBG", "INF", "WAR", "ERR"};
 
 Logger *g_default_logger = nullptr;
 Logger &getLogger() {
@@ -170,7 +173,7 @@ void LogChannel::format(const Logger& logger, std::ostream& ost, const LogContex
 #ifdef _WIN32
     ost << printTime(ctx->_tv) << " ";
 #else
-    ost << printTime(ctx->_tv) << " ";
+    ost << printTime(ctx->_tv) << " " << LOG_CONST_TABLE[ctx->_level] << " ";
 #endif
 
     if (enable_detail) {
@@ -220,6 +223,24 @@ void ConsoleChannel::write(const Logger& logger, const LogContextPtr& ctx){
         format(logger, std::cout, ctx);
 #endif
     }
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+
+void LoggerWrapper::printLog(Logger &logger, int level, const char *file, const char *function, int line, const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    LogContextCapture info(logger, (LogLevel) level, file, function, line);
+    char *str = nullptr;
+    if (vasprintf(&str, fmt, ap) >= 0 && str) {
+        info << str;
+#ifdef ASAN_USE_DELETE
+        delete [] str; // 开启asan后，用free会卡死
+#else
+        free(str);
+#endif
+    }
+    va_end(ap);
+}
 
 
 } // namespace FFZKit
