@@ -118,6 +118,23 @@ private:
     Logger &_logger;
 };
 
+
+///////////////////LogWriter///////////////////
+
+class LogWriter : public noncopyable {
+public:
+    LogWriter() = default;
+    virtual ~LogWriter() = default;
+
+    virtual void write(const Logger& logger, const LogContextPtr& ctx) = 0;
+};
+
+class AsyncLogWriter : public LogWriter {
+public:
+
+};
+
+
 ///////////////////LogChannel///////////////////
 
 class LogChannel : public  noncopyable {
