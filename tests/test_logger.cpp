@@ -26,6 +26,8 @@ private:
 int main(){
     // Initialize the logging system
     Logger::Instance().add(std::make_shared<ConsoleChannel> ());
+    Logger::Instance().add(std::make_shared<FileChannel>());
+    Logger::Instance().setWriter(std::make_shared<AsyncLogWriter>());
 
     InfoL << "测试std::cout风格打印：";
     //ostream支持的数据类型都支持,可以通过友元的方式打印自定义类型数据  [AUTO-TRANSLATED:c857af94]

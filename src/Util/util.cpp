@@ -1,9 +1,15 @@
 
-
+#include <cassert>
 #include <cstring>
+#include <algorithm>
+#include <locale>
+#include <atomic>
+
 #include "util.h"
 #include "File.h"
+#include "onceToken.h"
 #include "local_time.h"
+#include "logger.h"
 
 #if defined(_WIN32)
 #include <cstdio>
@@ -61,6 +67,18 @@ namespace FFZKit {
         return path.substr(path.rfind('/')+ 1);
     }
 
+    bool start_with(const std::string &str, const std::string &substr) {
+        return str.find(substr) == 0;
+    }
+
+    bool end_with(const std::string &str, const std::string &substr) {
+        if (str.size() < substr.size()) {
+            return false;
+        }
+        auto pos = str.rfind(substr);
+        return pos != string::npos && (pos == str.size() - substr.size());
+    }
+
     vector<string> split(const string &s, const char *delim) {
         vector<string> ret;
         size_t last = 0;
@@ -78,6 +96,195 @@ namespace FFZKit {
         return ret;
     }
 
+    std::string &strToLower(std::string &str) {
+        transform(str.begin(), str.end(), str.begin(), towlower);
+        return str;
+    }
+
+    std::string strToLower(std::string &&str) {
+        transform(str.begin(), str.end(), str.begin(), towlower);
+        return std::move(str);
+    }
+
+    std::string &strToUpper(std::string &str) {
+        transform(str.begin(), str.end(), str.begin(), towupper);
+        return str;
+    }
+
+    std::string strToUpper(std::string &&str) {
+        transform(str.begin(), str.end(), str.begin(), towupper);
+        return std::move(str);
+    }
+
+#if defined(_WIN32)
+void sleep(int second) {
+    Sleep(1000 * second);
+}
+
+void usleep(int micro_seconds) {
+    this_thread::sleep_for(std::chrono::microseconds(micro_seconds));
+}
+
+int gettimeofday(struct timeval *tp, void *tzp) {
+    auto now_stamp = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    tp->tv_sec = (decltype(tp->tv_sec))(now_stamp / 1000000LL);
+    tp->tv_usec = now_stamp % 1000000LL;
+    return 0;
+}
+
+const char *strcasestr(const char *big, const char *little){
+    string big_str = big;
+    string little_str = little;
+    strToLower(big_str);
+    strToLower(little_str);
+    auto pos = strstr(big_str.data(), little_str.data());
+    if (!pos){
+        return nullptr;
+    }
+    return big + (pos - big_str.data());
+}
+
+int vasprintf(char **strp, const char *fmt, va_list ap) {
+    // _vscprintf tells you how big the buffer needs to be
+    int len = _vscprintf(fmt, ap);
+    if (len == -1) {
+        return -1;
+    }
+    size_t size = (size_t)len + 1;
+    char *str = (char*)malloc(size);
+    if (!str) {
+        return -1;
+    }
+    // _vsprintf_s is the "secure" version of vsprintf
+    int r = vsprintf_s(str, len + 1, fmt, ap);
+    if (r == -1) {
+        free(str);
+        return -1;
+    }
+    *strp = str;
+    return r;
+}
+
+ int asprintf(char **strp, const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    int r = vasprintf(strp, fmt, ap);
+    va_end(ap);
+    return r;
+}
+
+#endif //WIN32
+
+    static long s_gmtoff = 0; //时间差
+
+    static OnceToken s_token([]() {
+#ifdef _WIN32
+    TIME_ZONE_INFORMATION tzinfo;
+    DWORD dwStandardDaylight;
+    long bias;
+    dwStandardDaylight = GetTimeZoneInformation(&tzinfo);
+    bias = tzinfo.Bias;
+    if (dwStandardDaylight == TIME_ZONE_ID_STANDARD) {
+        bias += tzinfo.StandardBias;
+    }
+    if (dwStandardDaylight == TIME_ZONE_ID_DAYLIGHT) {
+        bias += tzinfo.DaylightBias;
+    }
+    s_gmtoff = -bias * 60; //时间差(分钟)
+#else
+        local_time_init();
+        s_gmtoff = getLocalTime(time(nullptr)).tm_gmtoff;
+#endif // _WIN32
+    });
+
+    long getGMTOff() {
+        return s_gmtoff;
+    }
+
+    static inline uint64_t getCurrentMicrosecondOrigin() {
+#if !defined(_WIN32)
+        struct timeval tv;
+        gettimeofday(&tv, nullptr);
+        return tv.tv_sec * 1000000LL + tv.tv_usec;
+#else
+        return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+#endif
+    }
+
+    static atomic<uint64_t> s_currentMicrosecond(0);
+    static atomic<uint64_t> s_currentMillisecond(0);
+    static atomic<uint64_t> s_currentMicrosecond_system(getCurrentMicrosecondOrigin());
+    static atomic<uint64_t> s_currentMillisecond_system(getCurrentMicrosecondOrigin() / 1000);
+
+    static inline bool initMillisecondThread() {
+        static std::thread s_thread([]() {
+            setThreadName("stamp thread");
+            DebugL << "Stamp thread started";
+            uint64_t last = getCurrentMicrosecondOrigin();
+            uint64_t now;
+            uint64_t microsecond = 0;
+            while (true) {
+                now = getCurrentMicrosecondOrigin();
+                //记录系统时间戳，可回退
+                s_currentMicrosecond_system.store(now, memory_order_release);
+                s_currentMillisecond_system.store(now / 1000, memory_order_release);
+
+                //记录流逝时间戳，不可回退
+                int64_t expired = now - last;
+                last = now;
+                if (expired > 0 && expired < 1000 * 1000) {
+                    //流逝时间处于0~1000ms之间，那么是合理的，说明没有调整系统时间
+                    microsecond += expired;
+                    s_currentMicrosecond.store(microsecond, memory_order_release);
+                    s_currentMillisecond.store(microsecond / 1000, memory_order_release);
+                } else if (expired != 0) {
+                    WarnL << "Stamp expired is abnormal: " << expired;
+                }
+                //休眠0.5 ms  [AUTO-TRANSLATED:5e20acdd]
+                //Sleep for 0.5 ms
+                usleep(500);
+            }
+        });
+        static OnceToken s_token([]() {
+            s_thread.detach();
+        });
+        return true;
+    }
+
+    uint64_t getCurrentMillisecond(bool system_time) {
+        static bool flag = initMillisecondThread();
+        if (system_time) {
+            return s_currentMillisecond_system.load(memory_order_acquire);
+        }
+        return s_currentMillisecond.load(memory_order_acquire);
+    }
+
+    uint64_t getCurrentMicrosecond(bool system_time) {
+        static bool flag = initMillisecondThread();
+        if (system_time) {
+            return s_currentMicrosecond_system.load(memory_order_acquire);
+        }
+        return s_currentMicrosecond.load(memory_order_acquire);
+    }
+
+    string getTimeStr(const char *fmt, time_t time) {
+        if (!time) {
+            time = ::time(nullptr);
+        }
+        auto tm = getLocalTime(time);
+        size_t size = strlen(fmt) + 64;
+        string ret;
+        ret.resize(size);
+        size = std::strftime(&ret[0], size, fmt, &tm);
+        if (size > 0) {
+            ret.resize(size);
+        }
+        else{
+            ret = fmt;
+        }
+        return ret;
+    }
+
     struct tm getLocalTime(time_t sec) {
         struct tm tm;
 #ifdef _WIN32
@@ -88,6 +295,66 @@ namespace FFZKit {
         return tm;
     }
 
+    static thread_local string thread_name;
+
+    static string limitString(const char *name, size_t max_size) {
+        string str = name;
+        if (str.size() + 1 > max_size) {
+            auto erased = str.size() + 1 - max_size + 3;
+            str.replace(5, erased, "...");
+        }
+        return str;
+    }
+
+    void setThreadName(const char *name) {
+        assert(name);
+#if defined(__linux) || defined(__linux__) || defined(__MINGW32__)
+        pthread_setname_np(pthread_self(), limitString(name, 16).data());
+#elif defined(__MACH__) || defined(__APPLE__)
+        pthread_setname_np(limitString(name, 32).data());
+#elif defined(_MSC_VER)
+    // SetThreadDescription was added in 1607 (aka RS1). Since we can't guarantee the user is running 1607 or later, we need to ask for the function from the kernel.
+    using SetThreadDescriptionFunc = HRESULT(WINAPI * )(_In_ HANDLE hThread, _In_ PCWSTR lpThreadDescription);
+    static auto setThreadDescription = reinterpret_cast<SetThreadDescriptionFunc>(::GetProcAddress(::GetModuleHandle("Kernel32.dll"), "SetThreadDescription"));
+    if (setThreadDescription) {
+        // Convert the thread name to Unicode
+        wchar_t threadNameW[MAX_PATH];
+        size_t numCharsConverted;
+        errno_t wcharResult = mbstowcs_s(&numCharsConverted, threadNameW, name, MAX_PATH - 1);
+        if (wcharResult == 0) {
+            HRESULT hr = setThreadDescription(::GetCurrentThread(), threadNameW);
+            if (!SUCCEEDED(hr)) {
+                int i = 0;
+                i++;
+            }
+        }
+    } else {
+        // For understanding the types and values used here, please see:
+        // https://docs.microsoft.com/en-us/visualstudio/debugger/how-to-set-a-thread-name-in-native-code
+
+        const DWORD MS_VC_EXCEPTION = 0x406D1388;
+#pragma pack(push, 8)
+        struct THREADNAME_INFO {
+            DWORD dwType = 0x1000; // Must be 0x1000
+            LPCSTR szName;         // Pointer to name (in user address space)
+            DWORD dwThreadID;      // Thread ID (-1 for caller thread)
+            DWORD dwFlags = 0;     // Reserved for future use; must be zero
+        };
+#pragma pack(pop)
+
+        THREADNAME_INFO info;
+        info.szName = name;
+        info.dwThreadID = (DWORD) - 1;
+
+        __try{
+                RaiseException(MS_VC_EXCEPTION, 0, sizeof(info) / sizeof(ULONG_PTR), reinterpret_cast<const ULONG_PTR *>(&info));
+        } __except(GetExceptionCode() == MS_VC_EXCEPTION ? EXCEPTION_CONTINUE_EXECUTION : EXCEPTION_EXECUTE_HANDLER) {
+        }
+    }
+#else
+    thread_name = name ? name : "";
+#endif
+    }
 
     string getThreadName() {
 #if ((defined(__linux) || defined(__linux__)) && !defined(ANDROID)) || (defined(__MACH__) || defined(__APPLE__)) || (defined(ANDROID) && __ANDROID_API__ >= 26) || defined(__MINGW32__)

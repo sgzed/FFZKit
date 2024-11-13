@@ -4,13 +4,18 @@
 #include <memory>
 #include <map>
 #include <fstream>
+#include <thread>
+#include <set>
 
 #include "util.h"
+#include "Thread/semaphore.h"
+#include "List.h"
 
 namespace FFZKit {
 
 class LogContext;
 class LogChannel;
+class LogWriter;
 class Logger;
 
 using LogContextPtr = std::shared_ptr<LogContext>;
@@ -23,6 +28,7 @@ typedef enum {
 
 class Logger : public std::enable_shared_from_this<Logger>, public noncopyable {
 public:
+    friend class AsyncLogWriter;
     using Ptr = std::shared_ptr<Logger>;
     
     /* 
@@ -30,7 +36,7 @@ public:
     */
     static Logger &Instance();
 
-    ~Logger() = default;
+    ~Logger();
 
     const std::string &getName() const {
         return _logger_name;
@@ -46,6 +52,8 @@ public:
 
     void write(const LogContextPtr &ctx);
 
+    void setWriter(const std::shared_ptr<LogWriter> &writer);
+
 protected:
     explicit Logger(const std::string& loggerName);
 
@@ -54,6 +62,7 @@ private:
     void writeChannels_l(const LogContextPtr &ctx);
 
 private:
+    std::shared_ptr<LogWriter> _writer;
     std::string  _logger_name;
     LogContextPtr _last_log;
     std::shared_ptr<LogChannel> _default_channel;
@@ -126,16 +135,28 @@ public:
     LogWriter() = default;
     virtual ~LogWriter() = default;
 
-    virtual void write(const Logger& logger, const LogContextPtr& ctx) = 0;
+    virtual void write(Logger& logger, const LogContextPtr& ctx) = 0;
 };
 
 class AsyncLogWriter : public LogWriter {
 public:
+    AsyncLogWriter();
+    ~AsyncLogWriter();
 
+private:
+    void run();
+    void flushAll();
+    void write(Logger& logger, const LogContextPtr& ctx) override;
+
+private:
+    bool _exit_flag;
+    semaphore _sem;
+    std::mutex _mutex;
+    std::shared_ptr<std::thread> _thread;
+    List<std::pair<LogContextPtr, Logger *> > _pending;
 };
 
-
-///////////////////LogChannel///////////////////
+////////////////////////////LogChannel///////////////////////////
 
 class LogChannel : public  noncopyable {
 public:
@@ -161,6 +182,62 @@ public:
     ~ConsoleChannel() override = default;
 
     void write(const Logger& logger, const LogContextPtr& ctx) override;
+};
+
+class FileChannelBase : public LogChannel {
+public:
+    FileChannelBase(const std::string &name = "FileChannelBase", const std::string &dir = exePath() + ".log", LogLevel level = LTrace);
+    ~FileChannelBase();
+
+    void write(const Logger &logger, const LogContextPtr &ctx) override;
+    bool setPath(const std::string &path);
+    const std::string &path() const;
+
+protected:
+    virtual bool open();
+    virtual void close();
+    virtual size_t size();
+
+protected:
+    std::string _path;
+    std::ofstream _fstream;
+};
+
+class FileChannel : public FileChannelBase {
+public:
+    FileChannel(const std::string &name = "FileChannel", const std::string &dir = exeDir() + "log/", LogLevel level = LTrace);
+    ~FileChannel() override = default;
+
+    /*
+     * 写日志，触发过期日志删除
+     */
+    void write(const Logger& logger, const LogContextPtr& ctx) override;
+
+    void setMaxDay(size_t max_day);
+
+    void setFileMaxSize(size_t max_size);
+
+    void setFileMaxCount(size_t max_count);
+
+private:
+    void clean();
+    void checkSize(time_t second);
+    void changeFile(time_t second);
+
+private:
+    bool _can_write = false;
+    //默认最多保存30天的日志文件
+    size_t _log_max_day = 30;
+    //每个日志切片文件最大默认128MB
+    size_t _log_max_size = 128;
+    //最多默认保持30个日志切片文件  [
+    size_t _log_max_count = 30;
+    //当前日志切片文件索引
+    size_t _index = 0;
+    int64_t _last_day = -1;
+    time_t _last_check_time = 0;
+    std::string _dir;
+    std::set<std::string> _log_file_map;
 };
 
 class BaseLogFlagInterface {

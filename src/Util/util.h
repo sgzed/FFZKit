@@ -37,12 +37,39 @@ private:
     noncopyable &operator=(noncopyable &&that) = delete;
 };
 
-
 std::string exePath(bool isExe = true);
 std::string exeDir(bool isExe = true);
 std::string exeName(bool isExe = true);
 
+//字符串是否以xx开头
+bool start_with(const std::string &str, const std::string &substr);
+//字符串是否以xx结尾
+bool end_with(const std::string &str, const std::string &substr);
+
 std::vector<std::string> split(const std::string& s, const char *delim);
+
+// string转小写
+std::string &strToLower(std::string &str);
+std::string strToLower(std::string &&str);
+// string转大写
+std::string &strToUpper(std::string &str);
+std::string strToUpper(std::string &&str);
+
+
+/**
+ * 获取时间差, 返回值单位为秒
+ */
+long getGMTOff();
+
+/**
+ * 获取1970年至今的毫秒数
+ * @param system_time 是否为系统时间(系统时间可以回退),否则为程序启动时间(不可回退)
+ */
+uint64_t getCurrentMillisecond(bool system_time = false);
+
+uint64_t getCurrentMicrosecond(bool system_time = false);
+
+std::string getTimeStr(const char *fmt,time_t time = 0);
 
 /**
  * 根据unix时间戳获取本地时间
@@ -50,6 +77,8 @@ std::vector<std::string> split(const std::string& s, const char *delim);
  * @return tm结构体
  */
 struct tm getLocalTime(time_t sec);
+
+void setThreadName(const char *name);
 
 std::string getThreadName();
 
