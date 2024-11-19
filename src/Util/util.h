@@ -5,6 +5,7 @@
 #include <memory>
 #include <vector>
 #include <sstream>
+#include "function_traits.h"
 
 #if defined(_WIN32)
 #undef FD_SETSIZE
@@ -36,6 +37,86 @@ private:
     noncopyable &operator=(const noncopyable &that) = delete;
     noncopyable &operator=(noncopyable &&that) = delete;
 };
+
+#ifndef CLASS_FUNC_TRAITS
+#define CLASS_FUNC_TRAITS(func_name) \
+template<typename T, typename ... ARGS> \
+constexpr bool Has_##func_name(decltype(&T::on##func_name)) { \
+    using RET = typename function_traits<decltype(&T::on##func_name)>::return_type; \
+    using FuncType = RET (T::*)(ARGS...);   \
+    return std::is_same<decltype(&T::on##func_name), FuncType>::value; \
+} \
+\
+template<class T, typename ... ARGS> \
+constexpr bool Has_##func_name(...) { \
+    return false; \
+} \
+\
+template<typename T, typename ... ARGS> \
+static void InvokeFunc_##func_name(typename std::enable_if<!Has_##func_name<T, ARGS...>(nullptr), T>::type &obj, ARGS ...args) {} \
+\
+template<typename T, typename ... ARGS>\
+static typename function_traits<decltype(&T::on##func_name)>::return_type InvokeFunc_##func_name(typename std::enable_if<Has_##func_name<T, ARGS...>(nullptr), T>::type &obj, ARGS ...args) {\
+    return obj.on##func_name(std::forward<ARGS>(args)...);\
+}
+#endif //CLASS_FUNC_TRAITS
+
+#ifndef CLASS_FUNC_INVOKE
+#define CLASS_FUNC_INVOKE(T, obj, func_name, ...) InvokeFunc_##func_name<T>(obj, ##__VA_ARGS__)
+#endif //CLASS_FUNC_INVOKE
+
+CLASS_FUNC_TRAITS(Destory)
+CLASS_FUNC_TRAITS(Create)
+
+/**
+ * 对象安全的构建和析构,构建后执行onCreate函数,析构前执行onDestory函数
+ * 在函数onCreate和onDestory中可以执行构造或析构中不能调用的方法，比如说shared_from_this或者虚函数
+ * @warning onDestory函数确保参数个数为0；否则会被忽略调用
+ */
+
+class Creator {
+public:
+     /**
+     * 创建对象，用空参数执行onCreate和onDestory函数
+     * @param args 对象构造函数参数列表
+     * @return args对象的智能指针
+     */
+    template<typename C, typename ...ArgsType>
+    static std::shared_ptr<C> create(ArgsType &&...args) {
+        std::shared_ptr<C> ret(new C(std::forward<ArgsType>(args)...), [](C *ptr) {
+             try {
+                CLASS_FUNC_INVOKE(C, *ptr, Destory);
+            } catch (std::exception &ex){
+                onDestoryException(typeid(C), ex);
+            }
+            delete ptr;
+        });
+        CLASS_FUNC_INVOKE(C, *ret, Create);
+        return ret;
+    }
+
+    template<typename C, typename ...ArgsType>
+    static std::shared_ptr<C> create2(ArgsType &&...args) {
+        std::shared_ptr<C> ret(new C(), [](C *ptr) {
+            try {
+                CLASS_FUNC_INVOKE(C, *ptr, Destory);
+            } catch (std::exception &ex){
+                onDestoryException(typeid(C), ex);
+            }
+            delete ptr;
+        });
+        CLASS_FUNC_INVOKE(C, *ret, Create, std::forward<ArgsType>(args)...);
+        return ret;
+    }
+
+private:
+    static void onDestoryException(const std::type_info &info, const std::exception &ex);
+
+private:
+    Creator() = default;
+    ~Creator() = default;
+};
+
 
 std::string exePath(bool isExe = true);
 std::string exeDir(bool isExe = true);
@@ -81,6 +162,17 @@ struct tm getLocalTime(time_t sec);
 void setThreadName(const char *name);
 
 std::string getThreadName();
+
+/**
+ * 根据typeid(class).name()获取类名
+ */
+std::string demangle(const char *mangled);
+
+/**
+ * 获取环境变量内容，以'$'开头
+ */
+std::string getEnv(const std::string &key);
+
 
 } // namespace FFZKit
 
