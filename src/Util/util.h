@@ -129,6 +129,10 @@ bool end_with(const std::string &str, const std::string &substr);
 
 std::vector<std::string> split(const std::string& s, const char *delim);
 
+//去除前后的空格、回车符、制表符...
+std::string& trim(std::string &s,const std::string &chars=" \r\n\t");
+std::string trim(std::string &&s,const std::string &chars=" \r\n\t");
+
 // string转小写
 std::string &strToLower(std::string &str);
 std::string strToLower(std::string &&str);

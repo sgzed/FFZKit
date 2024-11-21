@@ -98,6 +98,27 @@ namespace FFZKit {
         return ret;
     }
 
+    #define TRIM(s, chars) \
+    do{ \
+        string map(0xFF, '\0'); \
+        for (auto &ch : chars) { \
+            map[(unsigned char &)ch] = '\1'; \
+        } \
+        while( s.size() && map.at((unsigned char &)s.back())) s.pop_back(); \
+        while( s.size() && map.at((unsigned char &)s.front())) s.erase(0,1); \
+    }while(0);
+
+
+    std::string &trim(std::string &s, const string &chars) {
+        TRIM(s, chars);
+        return s;
+    }
+
+    std::string trim(std::string &&s, const string &chars) {
+        TRIM(s, chars);
+        return std::move(s);
+    }
+
     std::string &strToLower(std::string &str) {
         transform(str.begin(), str.end(), str.begin(), towlower);
         return str;
