@@ -5,6 +5,10 @@
 #include "logger.h"
 #include "File.h"
 
+#if defined(_WIN32)
+#include "strptime_win.h"
+#endif
+
 using namespace std;
 
 namespace FFZKit {

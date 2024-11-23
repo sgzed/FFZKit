@@ -103,7 +103,55 @@ private:
     }
 };
 
+// handy variant class as key/values 
+class variant : public std::string {
+public:
+    template<typename T> 
+    variant(const T &t) : 
+        std::string(std::to_string(t)) {
+    }
 
+    template<size_t N> 
+    variant(const char (&t)[N]) :
+        std::string(t, N) {
+    }
+
+    variant(const char* cstr) :
+        std::string(cstr) {
+    }
+
+    template<typename T>
+    operator T() const {
+        return as<T>();
+    }
+
+    template<typename T>
+    bool operator==(const T& t) const {
+        return 0 == this->compare(variant(t));
+    }
+
+    bool operator==(const char* t) const {
+        return this->compare(t) == 0;
+    }
+
+    template <typename T>
+    typename std::enable_if<!std::is_class<T>::value, T>::type as() const {
+        return as_default<T>();
+    }
+
+    template <typename T>
+    typename std::enable_if<std::is_class<T>::value, T>::type as() const {
+        return T((const std::string&)*this);
+    }
+
+private:
+    template <typename T>
+    T as_default() const {
+        T t;
+        std::stringstream ss;
+        return ss << *this && ss >> t ? t : T();
+    }
+};
 
 using mINI = mINI_basic<std::string, variant>;
 

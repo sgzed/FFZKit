@@ -141,6 +141,45 @@ std::string &strToUpper(std::string &str);
 std::string strToUpper(std::string &&str);
 
 
+#ifndef bzero
+#define bzero(ptr,size)  memset((ptr),0,(size));
+#endif //bzero
+
+#if defined(ANDROID)
+template <typename T>
+std::string to_string(T value) {
+    std::ostringstream os;
+    os << std::forward<T>(value);
+    return os.str();
+}
+#endif//ANDROID
+
+#if defined(_WIN32)
+int gettimeofday(struct timeval* tp, void* tzp);
+void usleep(int micro_seconds);
+void sleep(int second);
+int vasprintf(char** strp, const char* fmt, va_list ap);
+int asprintf(char** strp, const char* fmt, ...);
+const char* strcasestr(const char* big, const char* little);
+
+#if !defined(strcasecmp)
+#define strcasecmp _stricmp
+#endif
+
+#if !defined(strncasecmp)
+#define strncasecmp _strnicmp
+#endif
+
+#ifndef ssize_t
+#ifdef _WIN64
+#define ssize_t int64_t
+#else
+#define ssize_t int32_t
+#endif
+#endif
+#endif //WIN32
+
+
 /**
  * 获取时间差, 返回值单位为秒
  */

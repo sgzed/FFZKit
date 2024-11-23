@@ -29,9 +29,7 @@ int main(){
     Logger::Instance().add(std::make_shared<FileChannel>());
     Logger::Instance().setWriter(std::make_shared<AsyncLogWriter>());
 
-    InfoL << "测试std::cout风格打印：";
-    //ostream支持的数据类型都支持,可以通过友元的方式打印自定义类型数据  [AUTO-TRANSLATED:c857af94]
-    // All data types supported by ostream are supported, and custom type data can be printed through friend methods
+    InfoL << "test std::cout style print";
     TraceL << "object int"<< TestLog((int)1)  << endl;
     DebugL << "object short:"<<TestLog((short)2)  << endl;
     InfoL << "object float:" << TestLog((float)3.12345678)  << endl;
@@ -49,7 +47,7 @@ int main(){
     //根据RAII的原理，此处不需要输入 endl，也会在被函数栈pop时打印log
     ErrorL << "without endl!";
 
-    PrintI("测试printf风格打印：");
+    PrintI("test printf style print:");
     PrintT("this is a %s test:%d", "printf trace", 124);
     PrintD("this is a %s test:%p", "printf debug", (void*)124);
     PrintI("this is a %s test:%c", "printf info", 'a');
