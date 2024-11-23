@@ -120,6 +120,10 @@ public:
         std::string(cstr) {
     }
 
+    variant(const std::string &other = std::string()) :
+        std::string(other) {
+    }
+
     template<typename T>
     operator T() const {
         return as<T>();
@@ -152,6 +156,12 @@ private:
         return ss << *this && ss >> t ? t : T();
     }
 };
+
+template <>
+bool variant::as<bool>() const;
+
+template<>
+uint8_t variant::as<uint8_t>() const;
 
 using mINI = mINI_basic<std::string, variant>;
 
