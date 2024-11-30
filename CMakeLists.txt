@@ -15,6 +15,17 @@ set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
 #Set subdirectories
 set(SUB_DIR_LIST "Network" "Poller" "Thread" "Util")
 
+if(WIN32)
+    list(APPEND SUB_DIR_LIST "win32")
+    #防止Windows.h包含Winsock.h
+    #Prevent Windows.h from including Winsock.h
+    add_definitions(-DWIN32_LEAN_AND_MEAN)
+    if (MSVC)
+        add_compile_options("/utf-8")
+    endif()
+    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
+
 #使能c++11
 #Enable c++11
 set(CMAKE_CXX_STANDARD 11)
