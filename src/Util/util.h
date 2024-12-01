@@ -1,6 +1,7 @@
 #ifndef FFZKIT_UTIL_H
 #define FFZKIT_UTIL_H
 
+#include <cstring>
 #include <string>
 #include <memory>
 #include <vector>

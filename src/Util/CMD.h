@@ -23,7 +23,7 @@ public:
          ArgOptional = 2,//optional_argument
      };
 
-     //Option() = default; 
+     Option() = default;
 
      Option(char short_opt, const char* long_opt, enum ArgType arg_type, const char* default_value, bool must_exist,
          const char* des, const OptionHandler& cb): 
@@ -93,7 +93,7 @@ public:
 
              for (auto& pr : _map_options) {
                  auto& opt = pr.second;
-                 //´òÓ¡¶Ì²ÎºÍ³¤²ÎÃû
+                 //ï¿½ï¿½Ó¡ï¿½Ì²ÎºÍ³ï¿½ï¿½ï¿½ï¿½ï¿½
                  if (opt._short_opt) {
                      printer << "  -" << opt._short_opt << "  --" << opt._long_opt;
                  }
@@ -104,9 +104,9 @@ public:
                  for (size_t i = 0; i < maxLen_longOpt - opt._long_opt.size(); ++i) {
                      printer << " ";
                  }
-                 //´òÓ¡ÊÇ·ñÓĞ²Î
-                 printer << "  " << argsType[opt._type];
-                 //´òÓ¡Ä¬ÈÏ²ÎÊı
+                 //ï¿½ï¿½Ó¡ï¿½Ç·ï¿½ï¿½Ğ²ï¿½
+                 printer << "  " << argsType[opt._arg_type];
+                 //ï¿½ï¿½Ó¡Ä¬ï¿½Ï²ï¿½ï¿½ï¿½
                  std::string defaultValue = defaultNull;
                  if (opt._default_value) {
                      defaultValue = *opt._default_value;
@@ -115,9 +115,9 @@ public:
                  for (size_t i = 0; i < maxLen_default - defaultValue.size(); ++i) {
                      printer << " ";
                  }
-                 //´òÓ¡ÊÇ·ñ±ØÌî²ÎÊı
+                 //ï¿½ï¿½Ó¡ï¿½Ç·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
                  printer << "  " << mustExist[opt._must_exist];
-                 //´òÓ¡ÃèÊö
+                 //ï¿½ï¿½Ó¡ï¿½ï¿½ï¿½ï¿½
                  printer << "  " << opt._des << std::endl;
              }
              throw std::invalid_argument(printer.str());
@@ -135,7 +135,7 @@ public:
         return *this;
     }
 
-    OptionParser& operator<<(const Option&& option) {
+    OptionParser &operator<<(Option &&option) {
         int index = 0xFF + (int)_map_options.size();
         if (option._short_opt) {
             _map_char_index.emplace(option._short_opt, index);
@@ -242,16 +242,16 @@ public:
     std::shared_ptr<CMD> operator[](const char* name) {
         std::lock_guard<std::recursive_mutex> lck(_mtx);
         auto it = _cmd_map.find(name);
-        if (it == _cmd_map.end() {
-            throw std::invalid_argument(string("CMD not existed: ") + name);
+        if (it == _cmd_map.end()) {
+            throw std::invalid_argument(std::string("CMD not existed: ") + name);
         }
         return it->second;
     }
 
-    void operatror()(const char* name, int argc, char* argv[], const std::shared_ptr<std::ostream>& stream = nullptr) {
+    void operator()(const char* name, int argc, char *argv[], const std::shared_ptr<std::ostream> &stream = nullptr) {
         auto cmd = (*this)[name]; 
         if (!cmd) {
-            throw std::invalid_argument(string("CMD not existed: ") + name);
+            throw std::invalid_argument(std::string("CMD not existed: ") + name);
         }
         (*cmd)(argc, argv, stream);
     }
@@ -270,15 +270,15 @@ public:
         }
 
         for (auto& pr : _cmd_map) {
-            *stream) << "  " << pr.first;
+            (*stream) << "  " << pr.first;
             for (size_t i = 0; i < maxLen - pr.first.size(); ++i) {
-                *stream) << " ";
+                (*stream) << " ";
             }
             (*stream) << "  " << pr.second->description() << std::endl;
         }
     }
 
-    void operatorr()(const std::string& line, const std::shared_ptr<std::ostream>& stream = nullptr) {
+    void operator()(const std::string& line, const std::shared_ptr<std::ostream> &stream = nullptr) {
         if (line.empty()) {
             return;
         }
@@ -327,7 +327,7 @@ private:
 };
 
 
-//°ïÖúÃüÁî(help)£¬¸ÃÃüÁîÄ¬ÈÏÒÑ×¢²á
+//å¸®åŠ©å‘½ä»¤(help)ï¼Œè¯¥å‘½ä»¤é»˜è®¤å·²æ³¨å†Œ
 class CMD_help : public CMD {
 public:
     CMD_help() {
@@ -343,7 +343,7 @@ public:
 
 class ExitException : public std::exception {};
 
-//ÍË³ö³ÌĞòÃüÁî(exit)£¬¸ÃÃüÁîÄ¬ÈÏÒÑ×¢²á
+//é€€å‡ºç¨‹åºå‘½ä»¤(exit)ï¼Œè¯¥å‘½ä»¤é»˜è®¤å·²æ³¨å†Œ
 class CMD_exit : public CMD {
 public:
     CMD_exit() {
@@ -357,10 +357,10 @@ public:
     }
 };
 
-//ÍË³ö³ÌĞòÃüÁî(quit),¸ÃÃüÁîÄ¬ÈÏÒÑ×¢²á
+//é€€å‡ºç¨‹åºå‘½ä»¤(quit),è¯¥å‘½ä»¤é»˜è®¤å·²æ³¨å†Œ
 #define CMD_quit CMD_exit
 
-//Çå¿ÕÆÁÄ»ĞÅÏ¢ÃüÁî(clear)£¬¸ÃÃüÁîÄ¬ÈÏÒÑ×¢²á
+//æ¸…ç©ºå±å¹•ä¿¡æ¯å‘½ä»¤(clear)ï¼Œè¯¥å‘½ä»¤é»˜è®¤å·²æ³¨å†Œ
 class CMD_clear : public CMD {
 public:
     CMD_clear() {

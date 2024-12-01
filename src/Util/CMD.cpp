@@ -12,7 +12,7 @@ using namespace std;
 
 namespace FFZKit {
 
-//Ä¬ÈÏ×¢²áexit/quit/help/clearÃüÁî
+//Default registration of exit/quit/help/clear commands
 static OnceToken s_token([]() {
     REGIST_CMD(exit)
     REGIST_CMD(quit)
@@ -35,7 +35,7 @@ void OptionParser::operator()(mINI& all_args, int argc, char* argv[], const std:
             auto &opt = pr.second;
             //long opt
             tmp.name = (char*)opt._long_opt.data();
-            tmp.has_arg = opt._type;
+            tmp.has_arg = opt._arg_type;
             tmp.flag = nullptr;
             tmp.val = pr.first;
             vec_long_opt.emplace_back(tmp);
@@ -45,7 +45,7 @@ void OptionParser::operator()(mINI& all_args, int argc, char* argv[], const std:
                 continue;
             }
             str_short_opt.push_back(opt._short_opt);
-            switch (opt._type) {
+            switch (opt._arg_type) {
                  case Option::ArgRequired: str_short_opt.append(":"); break;
                  case Option::ArgOptional: str_short_opt.append("::"); break;
                  default: break;
@@ -69,7 +69,7 @@ void OptionParser::operator()(mINI& all_args, int argc, char* argv[], const std:
         stringstream ss;
         ss << "  unrecognized option, print \"-h\" for help";
         if (index < 0xFF) {
-            //¶Ì²ÎÊý
+            //ï¿½Ì²ï¿½ï¿½ï¿½
             auto it = _map_char_index.find(index);
             if (it == _map_char_index.end()) {
                 throw std::invalid_argument(ss.str());
@@ -91,7 +91,7 @@ void OptionParser::operator()(mINI& all_args, int argc, char* argv[], const std:
 
     for (auto& pr : _map_options) {
         if (pr.second._default_value && all_args.find(pr.second._long_opt) == all_args.end()) {
-            //ÓÐÄ¬ÈÏÖµ,¸³ÖµÄ¬ÈÏÖµ
+            //ï¿½ï¿½Ä¬ï¿½ï¿½Öµ,ï¿½ï¿½ÖµÄ¬ï¿½ï¿½Öµ
             all_args.emplace(pr.second._long_opt, *pr.second._default_value);
         }
     }
