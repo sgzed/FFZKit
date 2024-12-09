@@ -127,7 +127,7 @@ private:
         }
 
         if(create) {
-            EventDispatcher::Ptr dispatcher = std::make_shared<EventDispatcher>();
+            EventDispatcher::Ptr dispatcher(new EventDispatcher());
             _mapListener.emplace(event, dispatcher);
             return dispatcher;
         }
