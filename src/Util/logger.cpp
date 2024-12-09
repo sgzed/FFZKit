@@ -41,7 +41,7 @@ Logger &getLogger() {
         _channels.clear();
     }
 
-    void Logger::add(const std::shared_ptr<LogChannel> & channel) {
+    void Logger::add(const std::shared_ptr<LogChannel>& channel) {
         _channels[channel->name()] = std::move(channel);
     }
 
@@ -256,7 +256,7 @@ void LogChannel::format(const Logger& logger, std::ostream& ost, const LogContex
 
     // print log time and level
 #ifdef _WIN32
-    ost << printTime(ctx->_tv) << " ";
+    ost << printTime(ctx->_tv) << " " << LOG_CONST_TABLE[ctx->_level] << " ";
 #else
     ost << printTime(ctx->_tv) << " " << LOG_CONST_TABLE[ctx->_level] << " ";
 #endif
