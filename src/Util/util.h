@@ -244,7 +244,7 @@ public:
     template <typename T, typename... ArgsType> 
     void set(ArgsType&&... args) {
         _type = &typeid(T);
-        _data.reset(new T(std::forward<ArgsType>(args)...), [](void* ptr) { delete (T *)ptr});
+        _data.reset(new T(std::forward<ArgsType>(args)...), [](void* ptr) { delete (T *)ptr;});
     }
 
     template <typename T>
