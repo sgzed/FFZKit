@@ -93,7 +93,7 @@ public:
 
              for (auto& pr : _map_options) {
                  auto& opt = pr.second;
-                 //��ӡ�̲κͳ�����
+                 //打印短参和长参名
                  if (opt._short_opt) {
                      printer << "  -" << opt._short_opt << "  --" << opt._long_opt;
                  }
@@ -104,9 +104,9 @@ public:
                  for (size_t i = 0; i < maxLen_longOpt - opt._long_opt.size(); ++i) {
                      printer << " ";
                  }
-                 //��ӡ�Ƿ��в�
+                 //打印是否有参
                  printer << "  " << argsType[opt._arg_type];
-                 //��ӡĬ�ϲ���
+                 //打印默认参数
                  std::string defaultValue = defaultNull;
                  if (opt._default_value) {
                      defaultValue = *opt._default_value;
@@ -115,9 +115,9 @@ public:
                  for (size_t i = 0; i < maxLen_default - defaultValue.size(); ++i) {
                      printer << " ";
                  }
-                 //��ӡ�Ƿ�������
+                 //打印是否必填参数
                  printer << "  " << mustExist[opt._must_exist];
-                 //��ӡ����
+                 //打印描述
                  printer << "  " << opt._des << std::endl;
              }
              throw std::invalid_argument(printer.str());
