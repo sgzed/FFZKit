@@ -5,6 +5,12 @@ message(STATUS "CMake Version: ${CMAKE_VERSION}")
 
 message(STATUS "PROJECT_BINARY_DIR: ${PROJECT_BINARY_DIR}")
 
+if("${CMAKE_BUILD_TYPE}" STREQUAL "")
+  set(CMAKE_BUILD_TYPE "Debug")
+endif()
+
+message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
+
 #设置库文件路径
 #Set the library file path
 set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
