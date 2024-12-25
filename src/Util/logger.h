@@ -1,5 +1,5 @@
-#ifndef ZZKIT_LOGGER_H
-#define ZZKIT_LOGGER_H
+#ifndef ZZKIT_LOGGER_H_
+#define ZZKIT_LOGGER_H_
 
 #include <memory>
 #include <map>
@@ -290,4 +290,4 @@ extern Logger *g_defaultLogger;
 } // namespace FFZKit 
 
 
-#endif
+#endif  // __LOGGER_H__

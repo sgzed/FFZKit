@@ -263,7 +263,6 @@ int vasprintf(char **strp, const char *fmt, va_list ap) {
                 } else if (expired != 0) {
                     WarnL << "Stamp expired is abnormal: " << expired;
                 }
-                //休眠0.5 ms  [AUTO-TRANSLATED:5e20acdd]
                 //Sleep for 0.5 ms
                 usleep(500);
             }
