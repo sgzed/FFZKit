@@ -16,7 +16,10 @@ bool g_bExitFlag = false;
 
 int main() {
 	//设置程序退出信号处理函数
-	signal(SIGINT, [](int) {g_bExitFlag = true;});
+	signal(SIGINT, [](int) {
+        PrintI("exit by SIGINT");
+        g_bExitFlag = true;
+    });
 
 	Logger::Instance().add(std::make_shared<ConsoleChannel>());
 
