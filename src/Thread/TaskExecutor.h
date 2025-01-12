@@ -80,7 +80,7 @@ public:
 		_strongTask = nullptr;
 	}
 
-	operator bool() const {
+    operator bool() const {
 		return _strongTask && *_strongTask;
 	}
 

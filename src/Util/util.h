@@ -209,6 +209,13 @@ void setThreadName(const char *name);
 std::string getThreadName();
 
 /**
+ * 设置当前线程cpu亲和性
+ * @param i cpu索引，如果为-1，那么取消cpu亲和性
+ * @return 是否成功，目前只支持linux
+ */
+bool setThreadAffinity(int i);
+
+/**
  * 根据typeid(class).name()获取类名
  */
 std::string demangle(const char *mangled);
