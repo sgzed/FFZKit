@@ -36,6 +36,233 @@ int close(int fd) {
 #endif // defined(_WIN32)
 
 
+static inline string my_inet_ntop(int af, const void* addr) {
+    string ret;
+    ret.resize(128);
+    if(!inet_ntop(af, addr, (char *)ret.data(), ret.size())) {
+        ret.clear();
+    } else {
+        ret.resize(strlen(ret.data()));
+    }
+    return ret;
+}
+
+static inline bool support_ipv6_l() {
+    auto fd = ::socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
+    if(fd == -1) {
+        return false;
+    }
+    close(fd);
+    return true;
+}
+
+bool SockUtil::support_ipv6() {
+    static auto flag = support_ipv6_l();
+    return flag;
+}
+
+string SockUtil::inet_ntoa(const struct in_addr &addr) {
+    return my_inet_ntop(AF_INET, &addr);
+}
+
+std::string SockUtil::inet_ntoa(const struct in6_addr &addr) {
+    return my_inet_ntop(AF_INET6, &addr);
+}
+
+std::string SockUtil::inet_ntoa(const struct sockaddr *addr) {
+    switch (addr->sa_family) {
+        case AF_INET: return SockUtil::inet_ntoa(((struct sockaddr_in *)addr)->sin_addr);
+        case AF_INET6: {
+            if (IN6_IS_ADDR_V4MAPPED(&((struct sockaddr_in6 *)addr)->sin6_addr)) {
+                struct in_addr addr4;
+                memcpy(&addr4, 12 + (char *)&(((struct sockaddr_in6 *)addr)->sin6_addr), 4);
+                return SockUtil::inet_ntoa(addr4);
+            }
+            return SockUtil::inet_ntoa(((struct sockaddr_in6 *)addr)->sin6_addr);
+        }
+        default: return "";
+    }
+}
+
+uint16_t SockUtil::inet_port(const struct sockaddr *addr) {
+    switch (addr->sa_family) {
+        case AF_INET: return ntohs(((struct sockaddr_in *)addr)->sin_port);
+        case AF_INET6: return ntohs(((struct sockaddr_in6 *)addr)->sin6_port);
+        default: return 0;
+    }
+}
+
+int SockUtil::setCloseWait(int fd, int second) {
+    linger m_sLinger;
+    //在调用closesocket()时还有数据未发送完，允许等待 
+    //若m_sLinger.l_onoff=0;则调用closesocket()后强制关闭
+    m_sLinger.l_onoff = (second > 0);
+    // 设定等待时间为x秒
+    m_sLinger.l_linger = second;  
+    int ret = setsockopt(fd, SOL_SOCKET, SO_LINGER, (char *)&m_sLinger, sizeof(linger));
+    if(-1 == ret) {
+#ifndef _WIN32
+        WarnL << "setsockopt SO_LINGER failed";
+#endif
+    }
+    return ret;
+}
+
+int SockUtil::setNoDelay(int fd, bool on) {
+    int opt = on ? 1: 0;
+    int ret = setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (const char*)&opt, static_cast<socklen_t>(sizeof(opt)));
+    if (ret == -1) {
+        WarnL << "setsockopt TCP_NODELAY failed";
+    }
+    return ret;
+}
+
+int SockUtil::setReuseable(int fd, bool on, bool reuse_port) {
+    int opt = on ? 1 : 0;
+    int ret = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *) &opt, static_cast<socklen_t>(sizeof(opt)));
+    if (ret == -1) {
+        WarnL << "setsockopt SO_REUSEADDR failed";
+        return ret;
+    }
+
+#if defined(SO_REUSEPORT)
+    if (reuse_port) {
+        ret = setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, (char *) &opt, static_cast<socklen_t>(sizeof(opt)));
+        if (ret == -1) {
+            TraceL << "setsockopt SO_REUSEPORT failed";
+        }
+    }
+#endif
+    return ret;
+}
+
+int SockUtil::setKeepAlive(int fd, bool on, int interval, int idle, int times) {
+    // Enable/disable the keep-alive option
+    int opt = on ? 1 : 0;
+    int ret = setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (char *) &opt, static_cast<socklen_t>(sizeof(opt)));
+    if (ret == -1) {
+        WarnL << "setsockopt SO_KEEPALIVE failed";
+    }
+#if !defined(_WIN32)
+    #if !defined(SOL_TCP) && defined(IPPROTO_TCP)
+    #define SOL_TCP IPPROTO_TCP
+    #endif
+
+    #if !defined(TCP_KEEPIDLE) && defined(TCP_KEEPALIVE)
+    #define TCP_KEEPIDLE TCP_KEEPALIVE
+    #endif
+
+     // Set the keep-alive parameters
+    if (on && interval > 0 && ret != -1) {
+        ret = setsockopt(fd, SOL_TCP, TCP_KEEPIDLE, (char *) &idle, static_cast<socklen_t>(sizeof(idle)));
+        if (ret == -1) {
+            WarnL << "setsockopt TCP_KEEPIDLE failed";
+        }
+        ret = setsockopt(fd, SOL_TCP, TCP_KEEPINTVL, (char *) &interval, static_cast<socklen_t>(sizeof(interval)));
+        if (ret == -1) {
+            WarnL << "setsockopt TCP_KEEPINTVL failed";
+        }
+        ret = setsockopt(fd, SOL_TCP, TCP_KEEPCNT, (char *) &times, static_cast<socklen_t>(sizeof(times)));
+        if (ret == -1) {
+            WarnL << "setsockopt TCP_KEEPCNT failed";
+        }
+    }
+#endif
+    return ret;
+}
+
+int SockUtil::setCloExec(int fd, bool on) {
+#if !defined(_WIN32)
+    int flags = fcntl(fd, F_GETFD);
+    if (flags == -1) {
+        WarnL << "fcntl F_GETFD failed";
+        return -1;
+    }
+    if (on) {
+        flags |= FD_CLOEXEC;
+    } else {
+        int cloexec = FD_CLOEXEC;
+        flags &= ~cloexec;
+    }
+    int ret = fcntl(fd, F_SETFD, flags);
+    if (ret == -1) {
+        WarnL << "fcntl F_SETFD failed";
+        return -1;
+    }
+    return ret;
+#else
+    return -1;
+#endif
+}
+
+int SockUtil::setNoSigpipe(int fd) {
+#if defined(SO_NOSIGPIPE)
+    int set = 1;
+    auto ret = setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, (char *) &set, sizeof(int));
+    if (ret == -1) {
+        WarnL << "setsockopt SO_NOSIGPIPE failed";
+    }
+    return ret;
+#else
+    return -1;
+#endif
+}
+
+int SockUtil::setNoBlocked(int fd, bool noblock) {
+#if defined(_WIN32)
+    unsigned long ul = noblock;
+#else
+    int ul = noblock;
+#endif //defined(_WIN32)
+    int ret = ioctl(fd, FIONBIO, &ul); //设置为非阻塞模式
+    if (ret == -1) {
+        WarnL << "ioctl FIONBIO failed";
+    }
+
+    return ret;
+}
+
+int SockUtil::setRecvBuf(int fd, int size) {
+    if (size <= 0) {
+        // use the system default value
+        return 0;
+    }
+    int ret = setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (char *)&size, sizeof(size));
+    if (ret == -1) {
+        WarnL << "setsockopt SO_RCVBUF failed";
+    }
+    return ret;
+}
+
+int SockUtil::setSendBuf(int fd, int size) {
+    if (size <= 0) {
+        return 0;
+    }
+    int ret = setsockopt(fd, SOL_SOCKET, SO_SNDBUF, (char *) &size, sizeof(size));
+    if (ret == -1) {
+        WarnL << "setsockopt SO_SNDBUF failed";
+    }
+    return ret;
+}
+
+bool SockUtil::is_ipv4(const char *host) {
+    struct in_addr addr;
+    return 1 == inet_pton(AF_INET, host, &addr);
+}
+
+bool SockUtil::is_ipv6(const char *host) {
+    struct in6_addr addr;
+    return 1 == inet_pton(AF_INET6, host, &addr);
+}
+
+socklen_t SockUtil::get_sock_len(const struct sockaddr *addr) {
+    switch (addr->sa_family) {
+        case AF_INET : return sizeof(sockaddr_in);
+        case AF_INET6 : return sizeof(sockaddr_in6);
+        default: assert(0); return 0;
+    }
+}
+
 struct sockaddr_storage SockUtil::make_sockaddr(const char *host, uint16_t port) {
     struct sockaddr_storage storage;
     bzero(&storage, sizeof(storage));
@@ -67,7 +294,7 @@ public:
         return s_instance;
     }
 
-    bool getDomainIP(const char *host, sockaddr_storage &storage, int ai_family = AF_INET,
+    bool getDomainIP(const char *host, struct sockaddr_storage &storage, int ai_family = AF_INET,
                          int ai_socktype = SOCK_STREAM, int ai_protocol = IPPROTO_TCP, int expire_sec = 60) {
 
         try {
@@ -172,6 +399,61 @@ bool SockUtil::getDomainIP(const char *host, uint16_t port, struct sockaddr_stor
     return flag;
 }
 
+static int set_ipv6_only(int fd, bool flag) {
+    int opt = flag; 
+    int ret = setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, (const char*)opt, sizeof opt);
+    if(ret == -1) {
+        WarnL << "setsockopt IPV6_V6ONLY failed: " << get_uv_error(true);
+    }
+    return ret;
+}
+
+static int bind_sock6(int fd, const char* ifr_ip, uint16_t port) {
+    set_ipv6_only(fd, false);
+    struct sockaddr_in6 addr;
+    bzero(&addr, sizeof(addr));
+    addr.sin6_family = AF_INET6;
+    addr.sin6_port = htons(port);
+
+    // 不是有效的ipv6地址
+    if(1 != inet_pton(AF_INET6, ifr_ip, &addr.sin6_addr)) {
+        // 也不是ipv4通配地址
+        if(strcmp(ifr_ip, "0.0.0.0")) {
+            WarnL << "inet_pton to ipv6 address failed: " << ifr_ip;
+        }
+        addr.sin6_addr = IN6ADDR_ANY_INIT;
+    }
+    
+    if(::bind(fd, (struct sockaddr*)&addr, sizeof(addr)) == -1) {
+        WarnL << "Bind socket failed: " << get_uv_errmsg(true);
+        return -1;
+    }
+    return 0;
+}
+
+static int bind_sock4(int fd, const char* ifr_ip, uint16_t port) {
+    struct sockaddr_in addr;
+    bzero(&addr, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+
+    // 不是有效的ipv4地址
+    if(1 != inet_pton(AF_INET, ifr_ip, &addr.sin_addr)) {
+        // 也不是ipv6通配地址
+        if(strcmp(ifr_ip, "::")) {
+            WarnL << "inet_pton to ipv4 address failed: " << ifr_ip;
+        }
+
+        addr.sin_addr.s_addr = INADDR_ANY;
+    }
+
+    if(::bind(fd, (struct sockaddr*)&addr, sizeof addr) == -1) {
+        WarnL << "Bind socket failed: " << get_uv_errmsg(true);
+        return -1;
+    }
+    return 0;
+}
+
 static int bind_sock(int fd, const char* ifr_ip, uint16_t port, int family) {
     switch (family)
     {
@@ -181,5 +463,74 @@ static int bind_sock(int fd, const char* ifr_ip, uint16_t port, int family) {
     }
 }
 
+int SockUtil::connect(const char *host, uint16_t port, bool async, const char *local_ip, uint16_t local_port) {
+    struct sockaddr_storage addr;
+    //优先使用ipv4地址
+     if (!getDomainIP(host, port, addr, AF_INET, SOCK_STREAM, IPPROTO_TCP)) {
+        //dns解析失败
+        return -1;
+    }
+
+    int sockfd = (int) socket(addr.ss_family, SOCK_STREAM, IPPROTO_TCP);
+    if (sockfd < 0) {
+        WarnL << "Create socket failed: " << host;
+        return -1;
+    }
+
+    setReuseable(sockfd);
+    setNoSigpipe(sockfd);
+    setNoBlocked(sockfd, async);
+    setNoDelay(sockfd);
+    setSendBuf(sockfd);
+    setRecvBuf(sockfd);
+    setCloseWait(sockfd);
+    setCloExec(sockfd);
+
+    if (bind_sock(sockfd, local_ip, local_port, addr.ss_family) == -1) {
+        close(sockfd);
+        return -1;
+    }
+
+    if (::connect(sockfd, (sockaddr *) &addr, get_sock_len((sockaddr *)&addr)) == 0) {
+        //同步连接成功
+        return sockfd;
+    }
+
+    if (async && get_uv_error(true) == UV_EAGAIN) {
+        //异步连接成功
+        return sockfd;
+    }
+    WarnL << "Connect socket to " << host << " " << port << " failed: " << get_uv_errmsg(true);
+    close(sockfd);
+    return -1;
+}
+
+
+int SockUtil::listen(const uint16_t port, const char *local_ip, int back_log) {
+    int fd = -1;
+    int family = support_ipv6() ? (is_ipv4(local_ip) ? AF_INET : AF_INET6) : AF_INET;
+    if ((fd = (int)::socket(family, SOCK_STREAM, IPPROTO_TCP)) == -1) {
+        WarnL << "Create socket failed: " << get_uv_errmsg(true);
+        return -1;
+    }
+
+    setReuseable(fd, true, false);
+    setNoBlocked(fd);
+    setCloExec(fd);
+
+    if (bind_sock(fd, local_ip, port, family) == -1) {
+        close(fd);
+        return -1;
+    }
+
+    //开始监听
+    if (::listen(fd, back_log) == -1) {
+        WarnL << "Listen socket failed: " << get_uv_errmsg(true);
+        close(fd);
+        return -1;
+    }
+
+    return fd;
+}
 
 } // FFZKit

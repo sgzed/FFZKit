@@ -114,7 +114,7 @@ public:
     * @param noblock 是否阻塞
     * @return 0代表成功，-1为失败
     */
-    static int setNoBlock(int fd, bool noblock = true);
+    static int setNoBlocked(int fd, bool noblock = true);
 
     /**
     * 设置socket接收缓存，默认貌似8K左右，一般有设置上限

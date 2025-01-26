@@ -175,7 +175,7 @@ public:
 	virtual TaskExecutor::Ptr getExecutor() = 0;
 
 	// 获取执行器个数
-    virtual size_t getExecutorSize() = 0;
+    virtual size_t getExecutorSize() const = 0;
 };
 
 class TaskExecutorGetterImp : public TaskExecutorGetter {
