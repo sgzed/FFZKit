@@ -178,6 +178,37 @@ public:
     virtual size_t getExecutorSize() = 0;
 };
 
+class TaskExecutorGetterImp : public TaskExecutorGetter {
+public:
+    TaskExecutorGetterImp() = default;
+    virtual ~TaskExecutorGetterImp() = default;
+
+    // 根据线程负载情况，获取最空闲的任务执行器
+	TaskExecutor::Ptr getExecutor() override;
+
+    /**
+    * 获取所有线程的负载率
+    * @return 所有线程的负载率
+    */
+    std::vector<int> getExecutorLoad();
+
+
+    /**
+     * 获取所有线程任务执行延时，单位毫秒
+     * 通过此函数也可以大概知道线程负载情况
+     */
+    void getExecutorDelay(const std::function<void(const std::vector<int> &)> &callback);
+
+    size_t getExecutorSize() const override;
+
+protected:
+    size_t addPoller(const std::string &name, size_t size, int priority, bool register_thread, bool enable_cpu_affinity = true);
+
+protected:
+    size_t thread_pos_ = 0;
+    std::vector<TaskExecutor::Ptr> threads_;
+};
+
 } //FFZKit
 
 #endif // FFZKIT_TASKEXECUTOR_H_
