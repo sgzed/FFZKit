@@ -18,7 +18,7 @@ namespace FFZKit {
 
 #if defined(_WIN32)
 
-static onceToken g_token([]() {
+static OnceToken g_token([]() {
     WORD wVersionRequested = MAKEWORD(2, 2);
     WSADATA wsaData;
     WSAStartup(wVersionRequested, &wsaData);
