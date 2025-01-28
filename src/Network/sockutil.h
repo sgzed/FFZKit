@@ -84,7 +84,7 @@ public:
      * @return -1代表失败，其他为socket fd号
      */
 
-    static int bindUdpSock(const uint64_t port, const char *local_ip = "::", bool enable_reuse = true);
+    static int bindUdpSock(const uint16_t port, const char *local_ip = "::", bool enable_reuse = true);
 
     /**
     * @brief 解除与 sock 相关的绑定关系
@@ -171,6 +171,11 @@ public:
     static bool getDomainIP(const char *host, uint16_t port, struct sockaddr_storage &addr, int ai_family = AF_INET,
                             int ai_socktype = SOCK_STREAM, int ai_protocol = IPPROTO_TCP, int expire_sec = 60);
 
+    /**
+    * 获取该socket当前发生的错误
+    * @param fd socket fd号
+    * @return 错误代码
+    */
     static int getSockError(int fd);
 
     /**
