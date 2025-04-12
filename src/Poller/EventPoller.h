@@ -23,6 +23,8 @@ namespace FFZKit {
 
 class EventPoller : public TaskExecutor, public std::enable_shared_from_this<EventPoller>  {
 public:
+    friend class TaskExecutorGetterImp;
+
     using Ptr = std::shared_ptr<EventPoller>;
 
     typedef enum {
@@ -32,7 +34,13 @@ public:
         Event_LT = 1 << 3,//水平触发
     } Poll_Event;
 
+    ~EventPoller();
 
+private:
+    /**
+     * 本对象只允许在EventPollerPool中构造
+     */
+    EventPoller(std::string name);
 };
 
 } // FFZKit
