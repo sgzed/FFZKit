@@ -288,7 +288,7 @@ public:
 
     operator bool() const { return _data.operator bool(); }
 
-    bool empty() const { return !bool(); }
+    bool empty() const { return !operator bool(); }
 
     void reset() {
         _type = nullptr;
