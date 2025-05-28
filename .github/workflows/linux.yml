@@ -10,9 +10,6 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - name: 下载submodule源码
-      run: mv -f .gitmodules_github .gitmodules && git submodule sync && git submodule update --init
-
     - name: 启动 Docker 容器, 在Docker 容器中执行脚本
       run: |
         docker pull centos:7 
