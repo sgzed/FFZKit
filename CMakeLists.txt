@@ -11,12 +11,15 @@ endif()
 
 message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
-#设置库文件路径
-#Set the library file path
-set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
-#设置可执行程序路径
-#Set the executable program path
-set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
+string(TOLOWER ${CMAKE_SYSTEM_NAME} SYSTEM_NAME_LOWER)
+# 设置输出目录, 包括 bin, lib 以及其他文件
+# Windows 也不再区分 32/64
+# Set the output directory, including bin, lib and other files
+# Windows no longer distinguishes 32/64
+set(OUTPUT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/release/${SYSTEM_NAME_LOWER}/${CMAKE_BUILD_TYPE})
+set(LIBRARY_OUTPUT_PATH    ${OUTPUT_DIR})
+set(EXECUTABLE_OUTPUT_PATH ${OUTPUT_DIR})
+
 #设置子目录
 #Set subdirectories
 set(SUB_DIR_LIST "Network" "Poller" "Thread" "Util")
