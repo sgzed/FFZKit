@@ -10,6 +10,14 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
+    - name: 下载 openssl
+      uses: actions/checkout@v3
+      with:
+        repository: openssl/openssl
+        fetch-depth: 1
+        ref: OpenSSL_1_1_1
+        path: openssl
+
     - name: 启动 Docker 容器, 在Docker 容器中执行脚本
       run: |
         docker pull centos:7 
@@ -43,6 +51,12 @@ jobs:
           yum install -y git wget gcc gcc-c++ make
         
           mkdir -p /root/install
+
+          cd openssl
+          ./config no-shared --prefix=/root/install
+          make -j $(nproc)
+          make install
+          cd ../
           
           wget https://github.com/Kitware/CMake/releases/download/v3.29.5/cmake-3.29.5.tar.gz
           tar -xf cmake-3.29.5.tar.gz
