@@ -455,8 +455,7 @@ static int bind_sock4(int fd, const char* ifr_ip, uint16_t port) {
 }
 
 static int bind_sock(int fd, const char* ifr_ip, uint16_t port, int family) {
-    switch (family)
-    {
+    switch (family) {
     case AF_INET:  return bind_sock4(fd, ifr_ip, port);
     case AF_INET6: return bind_sock6(fd, ifr_ip, port);
     default:    return -1;
@@ -775,8 +774,7 @@ int SockUtil::dissolveUdpSock(int fd) {
         return -1;
     }
     addr.ss_family = AF_UNSPEC;
-    if (-1 == ::connect(fd, (struct sockaddr *)&addr, addr_len) && get_uv_error() != UV_EAFNOSUPPORT)
-    {
+    if (-1 == ::connect(fd, (struct sockaddr *)&addr, addr_len) && get_uv_error() != UV_EAFNOSUPPORT) {
         // mac/ios时返回EAFNOSUPPORT错误
         WarnL << "Connect socket AF_UNSPEC failed: " << get_uv_errmsg(true);
         return -1;
