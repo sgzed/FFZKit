@@ -4,7 +4,7 @@
 
 #include "logger.h"
 
-namespace FFZkit {
+namespace FFZKit {
 
 class Ticker {
 public:
