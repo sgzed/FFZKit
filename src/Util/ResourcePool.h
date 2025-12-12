@@ -62,8 +62,8 @@ public:
     }
 #endif // defined(SUPPORT_DYNAMIC_TEMPLATE)
 
-    ~ResourcePool_l() {
-        for (auto ptr : _objs) {
+    ~ResourcePool_I() {
+        for (auto ptr : free_list_) {
             delete ptr;
         }
     }
