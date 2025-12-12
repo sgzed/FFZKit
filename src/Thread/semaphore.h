@@ -13,7 +13,7 @@ namespace FFZKit {
 class semaphore {
 public:
     semaphore() : _count(0) {}
-    ~semaphore()  =default;
+    ~semaphore() = default;
 
     void post(size_t n = 1) {
         std::unique_lock<std::recursive_mutex> lock(_mutex);

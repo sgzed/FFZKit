@@ -198,6 +198,8 @@ public:
      */
     void getExecutorDelay(const std::function<void(const std::vector<int> &)> &callback);
 
+	void for_each(const std::function<void(const TaskExecutor::Ptr&)> &callback);
+
     size_t getExecutorSize() const override;
 
 protected:

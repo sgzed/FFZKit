@@ -5,8 +5,6 @@
 #ifndef FFZKIT_THREADPOOL_H_
 #define FFZKIT_THREADPOOL_H_
 
-namespace FFZKit {
-
 #include "ThreadGroup.h"
 #include "TaskExecutor.h"
 #include "TaskQueue.h"

@@ -9,6 +9,7 @@
 
 #include "Util/logger.h"
 #include "Thread/TaskExecutor.h"
+#include "Thread/ThreadPool.h"
 
 #if defined(__linux__) || defined(__linux)
 #define HAS_EPOLL
@@ -18,12 +19,13 @@
 #define HAS_KQUEUE
 #endif // __APPLE__
 
-
 namespace FFZKit {
 
 class EventPoller : public TaskExecutor, public std::enable_shared_from_this<EventPoller>  {
 public:
     using Ptr = std::shared_ptr<EventPoller>;
+    using PollEventCB = std::function<void(int event)>;
+    using DelayTask = TaskCancelableImp<uint64_t(void)>;
 
     typedef enum {
         Event_Read = 1 << 0, //读事件
@@ -34,12 +36,14 @@ public:
 
     ~EventPoller();
 
-      /**
-     * 获取EventPollerPool单例中的第一个EventPoller实例，
-     * 保留该接口是为了兼容老代码
-     * @return 单例
+    /**
+     * 添加事件监听
+     * @param fd 监听的文件描述符
+     * @param event 事件类型，例如 Event_Read | Event_Write
+     * @param cb 事件回调functional
+     * @return -1:失败，0:成功
      */
-    static EventPoller &Instance();
+    int addEvent(int fd, int event, PollEventCB cb);
 
 
 private:
@@ -53,11 +57,13 @@ private:
 
 private:
     //标记loop线程是否退出
-    bool _exit_flag;
+    bool exit_flag_;
 
-// Thread name
-    std::string _name;
-    
+    // Thread name
+    std::string name_;
+
+    //当前线程下，所有socket共享的读缓存
+    //std::weak_ptr<SocketRecvBuffer> _shared_buffer[2];
 };
 
 } // FFZKit

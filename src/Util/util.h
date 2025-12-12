@@ -5,6 +5,7 @@
 #include <string>
 #include <memory>
 #include <vector>
+#include <atomic>
 #include <sstream>
 #include <unordered_map>
 #include "function_traits.h"
@@ -28,6 +29,27 @@ class_name &class_name::Instance() { \
 }
 
 namespace FFZKit {
+
+#define StrPrinter ::FFZKit::_StrPrinter()
+class _StrPrinter : public std::string {
+public:
+    _StrPrinter() {}
+
+    template<typename T>
+    _StrPrinter& operator <<(T&& data) {
+        _stream << std::forward<T>(data);
+        this->std::string::operator=(_stream.str());
+        return *this;
+    }
+
+    // std::endl 
+    std::string operator <<(std::ostream&(*f)(std::ostream&)) const {
+        return *this;
+    }
+
+private:
+    std::stringstream _stream;
+};
 
 class noncopyable {
 protected:
@@ -118,6 +140,32 @@ private:
     Creator() = default;
     ~Creator() = default;
 };
+
+template<class C>
+class ObjectStatistic {
+public:
+    ObjectStatistic() {
+        ++getCounter();
+    }
+
+    ~ObjectStatistic() {
+        --getCounter();
+    }
+
+    static size_t count(){
+        return getCounter().load();
+    }
+
+private:
+    static std::atomic<size_t>& getCounter();
+};
+
+#define StatisticImp(Type) \
+    template<> \
+    std::atomic<size_t>& ObjectStatistic<Type>::getCounter() { \
+        static std::atomic<size_t> s_counter(0); \
+        return s_counter; \
+    } \
 
 
 std::string exePath(bool isExe = true);

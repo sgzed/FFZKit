@@ -1,5 +1,7 @@
 #include "TaskExecutor.h"
+#include "Poller/EventPoller.h"
 #include "Util/onceToken.h"
+#include "Util/TimeTicker.h"
 #include "semaphore.h"
 
 using namespace std;
@@ -119,5 +121,86 @@ TaskExecutor::TaskExecutor(uint64_t max_size, uint64_t max_usec): ThreadLoadCoun
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 
+TaskExecutor::Ptr TaskExecutorGetterImp::getExecutor() {
+	if(threads_.empty()) {
+		return nullptr;
+	}
+
+	auto thread_pos = thread_pos_;
+	if(thread_pos >= threads_.size()) {
+		thread_pos = 0;
+	}
+
+	TaskExecutor::Ptr executor_min_load = threads_[thread_pos];
+	auto min_load = executor_min_load->load();
+
+	for(int i=0; i< threads_.size(); ++i) {
+		++thread_pos;
+		if(thread_pos >= threads_.size()) {
+			thread_pos = 0;
+		}
+
+		auto executor = threads_[thread_pos];
+		if(!executor) {
+			continue;
+		}
+		
+		auto load = executor->load();
+		if(load < min_load) {
+			min_load = load;
+			executor_min_load = executor;
+		}
+
+		if(0 == min_load) {
+			break; 
+		}
+	}
+	thread_pos_ = thread_pos;
+	return executor_min_load;
+}
+
+std::vector<int> TaskExecutorGetterImp::getExecutorLoad() {
+	vector<int> vec(threads_.size());
+	int i = 0;
+	for(auto& executor : threads_) {
+		vec[i++] = executor ? executor->load() : 0;
+	}
+	return vec;
+}
+
+void TaskExecutorGetterImp::getExecutorDelay(const function<void(const vector<int>&)> &callback) {
+	std::shared_ptr<vector<int> > delay_vec = std::make_shared<vector<int> >(threads_.size());
+	
+	std::shared_ptr<void> finished(nullptr, [callback, delay_vec](void*) {
+		callback(*delay_vec);
+	});
+
+	int index = 0;
+	for(auto &th : threads_) {
+		std::shared_ptr<Ticker> delay_ticker = std::make_shared<Ticker>();
+		th->async([finished, delay_vec, index, delay_ticker]() {
+			(*delay_vec)[index] = (int)delay_ticker->elapsedTime();
+		}, false);
+		++index;
+	}
+}
+
+void TaskExecutorGetterImp::for_each(const function<void(const TaskExecutor::Ptr&)> &callback) {
+	for(auto& executor : threads_) {
+		if(executor) {
+			callback(executor);
+		}
+	}
+}
+
+size_t TaskExecutorGetterImp::getExecutorSize() const {
+	return threads_.size();
+}
+
+size_t TaskExecutorGetterImp::addPoller(const string& name, size_t size, int priority, bool register_thread, bool enable_cpu_affinity) {
+ 	auto cpus = thread::hardware_concurrency();
+    size = size > 0 ? size : cpus;
+	return size;
+}
 
 } // namespace FFZKit
