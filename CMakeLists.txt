@@ -1,5 +1,5 @@
 project(FFZKit)
-cmake_minimum_required(VERSION 3.10.0)
+cmake_minimum_required(VERSION 3.1.3...3.26)
 
 message(STATUS "CMake Version: ${CMAKE_VERSION}")
 
@@ -12,72 +12,89 @@ endif()
 message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
 string(TOLOWER ${CMAKE_SYSTEM_NAME} SYSTEM_NAME_LOWER)
-# 设置输出目录, 包括 bin, lib 以及其他文件
-# Windows 也不再区分 32/64
-# Set the output directory, including bin, lib and other files
-# Windows no longer distinguishes 32/64
-set(OUTPUT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/release/${SYSTEM_NAME_LOWER}/${CMAKE_BUILD_TYPE})
-set(LIBRARY_OUTPUT_PATH    ${OUTPUT_DIR})
-set(EXECUTABLE_OUTPUT_PATH ${OUTPUT_DIR})
-
-#设置子目录
-#Set subdirectories
-set(SUB_DIR_LIST "Network" "Poller" "Thread" "Util")
-
-if(WIN32)
-    list(APPEND SUB_DIR_LIST "win32")
-    #防止Windows.h包含Winsock.h
-    #Prevent Windows.h from including Winsock.h
-    add_definitions(-DWIN32_LEAN_AND_MEAN)
-    if (MSVC)
-        add_compile_options("/utf-8")
-    endif()
-    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
-endif()
 
 #使能c++11
 #Enable c++11
 set(CMAKE_CXX_STANDARD 11)
 
-foreach(SUB_DIR ${SUB_DIR_LIST})
-    aux_source_directory(src/${SUB_DIR} SRC_LIST)
-endforeach()
+# -fPIC
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+# 打印详情
+set(CMAKE_VERBOSE_MAKEFILE ON)
+
+#加载自定义模块
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
+option(ENABLE_WEPOLL "Enable wepoll" ON)
+# shared library by default
+option(BUILD_SHARED_LIBS "Build all libraries shared" ON)
+
+# 方便修改全局变量
+function(update_cached name value)
+    set("${name}" "${value}" CACHE INTERNAL "*** Internal ***" FORCE)
+endfunction()
+
+function(update_cached_list name)
+    set(_tmp_list "${${name}}")
+    list(APPEND _tmp_list "${ARGN}")
+    list(REMOVE_DUPLICATES _tmp_list)
+    update_cached(${name} "${_tmp_list}")
+endfunction()
+
+update_cached(TK_INC_PATHS "")
+update_cached(TK_LINK_LIBRARIES "")
+update_cached(TK_COMPILE_DEFINITIONS "")
+update_cached(TK_COMPILE_OPTIONS "")
+
+# 收集源码
+file(GLOB SRC_LIST
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/*/*.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/*/*.mm
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/*/*.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/*/*/*.cpp)
 
 if (WIN32)
-    set(LINK_LIB_LIST WS2_32 Iphlpapi shlwapi)
+    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+    if (MSVC)
+        update_cached_list(TK_COMPILE_OPTIONS "/utf-8")
+    endif ()
+    update_cached_list(TK_LINK_LIBRARIES WS2_32 Iphlpapi shlwapi)
+    #防止Windows.h包含Winsock.h
+    update_cached_list(TK_COMPILE_DEFINITIONS WIN32_LEAN_AND_MEAN MP4V2_NO_STDINT_DEFS _CRT_SECURE_NO_WARNINGS _WINSOCK_DEPRECATED_NO_WARNINGS)
 else ()
-    set(LINK_LIB_LIST)
+    # 非Windows平台自带getopt api
+    list(FILTER SRC_LIST EXCLUDE REGEX "getopt.c$")
+    update_cached_list(TK_COMPILE_OPTIONS "-Wno-comment" "-Wno-deprecated-declarations" "-Wno-predefined-identifier-outside-function")
 endif ()
 
-if (NOT WIN32)
-    add_compile_options(-Wno-deprecated-declarations)
-    add_compile_options(-Wno-predefined-identifier-outside-function)
+if (NOT WIN32 OR NOT ENABLE_WEPOLL)
+    # 移除wepoll
+    list(FILTER SRC_LIST EXCLUDE REGEX "wepoll.c$")
+else ()
+    update_cached_list(TK_COMPILE_DEFINITIONS HAS_EPOLL)
+    update_cached_list(TK_INC_PATHS ${CMAKE_CURRENT_SOURCE_DIR}/src/win32/)
 endif ()
 
-#编译动态库
-#Compile dynamic library
-if (NOT IOS AND NOT ANDROID AND NOT WIN32)
-    add_library(${PROJECT_NAME}_shared SHARED ${SRC_LIST})
-    target_include_directories(${PROJECT_NAME}_shared PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
-    target_link_libraries(${PROJECT_NAME}_shared ${LINK_LIB_LIST})
-    set_target_properties(${PROJECT_NAME}_shared PROPERTIES OUTPUT_NAME "${PROJECT_NAME}")
-    install(TARGETS ${PROJECT_NAME}_shared ARCHIVE DESTINATION ${INSTALL_PATH_LIB} LIBRARY DESTINATION ${INSTALL_PATH_LIB})
+#非苹果平台移除.mm类型的文件
+if (NOT APPLE)
+    list(FILTER SRC_LIST EXCLUDE REGEX "Socket_ios.mm$")
 endif ()
 
-#编译静态库
-#Compile static library
-add_library(${PROJECT_NAME}_static STATIC ${SRC_LIST})
+# 库依赖
+add_library(${PROJECT_NAME}_deps INTERFACE)
+target_link_libraries(${PROJECT_NAME}_deps INTERFACE ${TK_LINK_LIBRARIES})
+
+#编译库
+add_library(${PROJECT_NAME} ${SRC_LIST})
 #引用头文件路径
-#Reference header file path
-target_include_directories(${PROJECT_NAME}_static PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
-set_target_properties(${PROJECT_NAME}_static PROPERTIES OUTPUT_NAME "${PROJECT_NAME}")
-#安装静态库至系统目录
-#Install static library to system directory
-install(TARGETS ${PROJECT_NAME}_static ARCHIVE DESTINATION ${INSTALL_PATH_LIB})
+target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src ${TK_INC_PATHS})
+target_link_libraries(${PROJECT_NAME} PUBLIC ${PROJECT_NAME}_deps)
+target_compile_definitions(${PROJECT_NAME} PUBLIC ${TK_COMPILE_DEFINITIONS})
+target_compile_options(${PROJECT_NAME} PUBLIC ${TK_COMPILE_OPTIONS})
+set_target_properties(${PROJECT_NAME} PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib
+                                                 ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 
-
-#测试程序
-#Test program
-if (NOT IOS)
+if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    #本工程为root工程，则添加测试程序
     add_subdirectory(tests)
 endif ()

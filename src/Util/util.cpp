@@ -249,8 +249,8 @@ int vasprintf(char **strp, const char *fmt, va_list ap) {
             while (true) {
                 now = getCurrentMicrosecondOrigin();
                 //记录系统时间戳，可回退
-                s_currentMicrosecond_system.store(now, memory_order_release);
-                s_currentMillisecond_system.store(now / 1000, memory_order_release);
+                s_currentMicrosecond_system.store(now, memory_order_relaxed);
+                s_currentMillisecond_system.store(now / 1000, memory_order_relaxed);
 
                 //记录流逝时间戳，不可回退
                 int64_t expired = now - last;
@@ -258,8 +258,8 @@ int vasprintf(char **strp, const char *fmt, va_list ap) {
                 if (expired > 0 && expired < 1000 * 1000) {
                     //流逝时间处于0~1000ms之间，那么是合理的，说明没有调整系统时间
                     microsecond += expired;
-                    s_currentMicrosecond.store(microsecond, memory_order_release);
-                    s_currentMillisecond.store(microsecond / 1000, memory_order_release);
+                    s_currentMicrosecond.store(microsecond, memory_order_relaxed);
+                    s_currentMillisecond.store(microsecond / 1000, memory_order_relaxed);
                 } else if (expired != 0) {
                     WarnL << "Stamp expired is abnormal: " << expired;
                 }
@@ -276,17 +276,17 @@ int vasprintf(char **strp, const char *fmt, va_list ap) {
     uint64_t getCurrentMillisecond(bool system_time) {
         static bool flag = initMillisecondThread();
         if (system_time) {
-            return s_currentMillisecond_system.load(memory_order_acquire);
+            return s_currentMillisecond_system.load(memory_order_relaxed);
         }
-        return s_currentMillisecond.load(memory_order_acquire);
+        return s_currentMillisecond.load(memory_order_relaxed);
     }
 
     uint64_t getCurrentMicrosecond(bool system_time) {
         static bool flag = initMillisecondThread();
         if (system_time) {
-            return s_currentMicrosecond_system.load(memory_order_acquire);
+            return s_currentMicrosecond_system.load(memory_order_relaxed);
         }
-        return s_currentMicrosecond.load(memory_order_acquire);
+        return s_currentMicrosecond.load(memory_order_relaxed);
     }
 
     string getTimeStr(const char *fmt, time_t time) {
