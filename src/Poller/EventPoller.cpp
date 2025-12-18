@@ -76,6 +76,48 @@ EventPoller::EventPoller(string name) {
     addEventPipe();
 }
 
+size_t EventPoller::fdCount() const {
+    return fd_count_;
+} 
+
+thread::id EventPoller::getThreadId() const {
+    return loop_thread_ ? loop_thread_->get_id() : thread::id();
+}
+
+const string& EventPoller::getThreadName() const {
+    return name_;
+}
+
+void EventPoller::shutdown() {
+    async_I([this]() {
+        throw ExitException();
+    }, false, true);
+
+    if(loop_thread_) {
+        try {
+            loop_thread_->join();
+        } catch (...) {
+            loop_thread_->detach();
+        }
+        delete loop_thread_;
+        loop_thread_ = nullptr;
+    }
+}
+
+EventPoller::~EventPoller() {
+    shutdown();
+
+#if defined(HAS_EPOLL) || defined(HAS_KQUEUE)
+    if (_event_fd != INVALID_EVENT_FD) {
+        close_event(_event_fd);
+        _event_fd = INVALID_EVENT_FD;
+    }
+#endif // HAS_EPOLL
+
+    onPipeEvent(true);
+    InfoL << getThreadName() << " destroyed!";
+}
+
 void EventPoller::runLoop(bool blocked, bool ref_self) {
     if (blocked) {
         if(ref_self) {
@@ -88,9 +130,9 @@ void EventPoller::runLoop(bool blocked, bool ref_self) {
 #if defined(HAS_EPOLL)
         struct epoll_event events[EPOLL_SIZE];
         while (!_exit_flag) {
-            //minDelay = getMinDelay();
+            minDelay = getMinDelay();
             startSleep(); // 用于统计当前线程负载情况
-            int nfds = epoll_wait(event_fd_, events, EPOLL_SIZE, -1 /*minDelay*/);
+            int nfds = epoll_wait(event_fd_, events, EPOLL_SIZE, minDelay);
             sleepWakeUp(); // 结束统计当前线程负载情况
             if (nfds < 0) {
                 // Timed out or interrupted
@@ -129,6 +171,10 @@ void EventPoller::runLoop(bool blocked, bool ref_self) {
         struct timeval tv;
 
         while (!exit_flag_) {
+            minDelay = getMinDelay();
+            tv.tv_sec = (decltype(tv.tv_sec))(minDelay / 1000);
+            tv.tv_usec = 1000 * (minDelay % 1000);
+
             set_read.fdZero();
             set_write.fdZero();
             set_err.fdZero();
@@ -152,7 +198,7 @@ void EventPoller::runLoop(bool blocked, bool ref_self) {
             }
 
             startSleep();
-            ret = fz_select(max_fd + 1, &set_read, &set_write, &set_err, nullptr);
+            ret = fz_select(max_fd + 1, &set_read, &set_write, &set_err, minDelay == -1 ? nullptr : &tv);
             sleepWakeUp();
 
             if (ret < 0) {
@@ -206,6 +252,35 @@ bool EventPoller::isCurrentThread() {
     return !loop_thread_  || this_thread::get_id() == loop_thread_->get_id();
 }
 
+Task::Ptr EventPoller::async(TaskIn task, bool may_sync) {
+    return async_I(std::move(task), may_sync, false);
+}
+
+Task::Ptr EventPoller::async_first(TaskIn task, bool may_sync) {
+    return async_I(std::move(task), may_sync, true);
+}
+
+Task::Ptr EventPoller::async_I(TaskIn task, bool may_sync, bool first) {
+    TimeTicker();
+    if(may_sync && isCurrentThread()) {
+        task();
+        return nullptr;
+    }
+    auto task_ptr = std::make_shared<Task>(std::move(task));
+    {
+        std::lock_guard<std::mutex> lock(mtx_task_);
+        if (first) {
+            list_task_.emplace_front(task_ptr);
+        } else {
+            list_task_.emplace_back(task_ptr);
+        }
+    } 
+    //通知poller线程执行任务
+    pipe_.write("", 1);
+    return task_ptr;
+}
+
+
 int EventPoller::addEvent(int fd, int event, PollEventCB cb) {
     TimeTicker();
     if (!cb) {
@@ -248,6 +323,130 @@ int EventPoller::addEvent(int fd, int event, PollEventCB cb) {
     return 0;
 }
 
+
+int EventPoller::delEvent(int fd, PollCompleteCB cb) {
+    TimeTicker();
+    if (!cb) {
+        cb = [](bool success) {};
+    }
+
+    if(isCurrentThread()) {
+#if defined(HAS_EPOLL)
+        int ret = -1;
+        if (event_map_.erase(fd)) {
+            event_cache_expired_.emplace(fd);
+            ret = epoll_ctl(event_fd_, EPOLL_CTL_DEL, fd, nullptr);
+        }
+        cb(ret != -1);
+        fd_count_ = event_map_.size();
+        return ret;
+
+#elif defined(HAS_KQUEUE)
+
+#else 
+        int ret = -1;
+        if (event_map_.erase(fd)) {
+            event_cache_expired_.emplace(fd);
+            ret = 0;
+        }
+        cb(ret != -1);
+        fd_count_ = event_map_.size();
+        return ret;    
+#endif // HAS_EPOLL
+    }
+
+    //Cross-thread operation
+    async([this, fd, cb]() mutable {
+        delEvent(fd, std::move(cb));
+    });
+    return 0;
+}
+
+int EventPoller::modifyEvent(int fd, int event, PollCompleteCB cb) {
+    TimeTicker();
+    if (!cb) {
+        cb = [](bool success) {};
+    }
+
+    if(isCurrentThread()) {
+#if defined(HAS_EPOLL)
+        struct epoll_event ev = { 0 };
+        ev.events = toEpoll(event);
+        ev.data.fd = fd;
+        auto ret = epoll_ctl(event_fd_, EPOLL_CTL_MOD, fd, &ev);
+        cb(ret != -1);
+        return ret;
+#elif defined(HAS_KQUEUE)
+
+#else 
+        auto it = event_map_.find(fd);
+        if (it != event_map_.end()) {
+            it->second->event = event;
+        }
+        cb(it != event_map_.end());
+        return it != event_map_.end() ? 0 : -1;
+#endif // HAS_EPOLL
+    }
+
+    async([this, fd, event, cb]() mutable {
+        modifyEvent(fd, event, std::move(cb));
+    });
+    return 0;
+}
+
+EventPoller::DelayTask::Ptr EventPoller::doDelayTask(uint64_t delay_ms, function<uint64_t()> task) {
+    auto delay_task = std::make_shared<DelayTask>(std::move(task));
+    auto time_line = getCurrentMillisecond() + delay_ms;
+    async_first([this, time_line, delay_task]() {
+        // 刷新select或epoll的休眠时间
+        delay_task_map_.emplace(time_line, delay_task);
+    });
+    return delay_task;
+}
+
+int64_t EventPoller::flushDelayTask(uint64_t now_time) {
+    decltype(delay_task_map_) task_copy;
+    task_copy.swap(delay_task_map_);
+
+    for(auto it = task_copy.begin(); it != task_copy.end() && it->first <= now_time; it = task_copy.erase(it)) {
+        //Expired tasks
+        try {
+            auto next_delay = (*(it->second))();
+            if (next_delay) { 
+                delay_task_map_.emplace(next_delay + now_time, std::move(it->second));
+            }
+        } catch (std::exception &ex) {
+            ErrorL << "Exception occurred when do delay task: " << ex.what();
+        }
+    }
+
+    task_copy.insert(delay_task_map_.begin(), delay_task_map_.end());
+    task_copy.swap(delay_task_map_);
+    auto it = delay_task_map_.begin();
+    if (it == delay_task_map_.end()) {
+        //No remaining timers
+        return -1;
+    }
+    //Delay in execution of the last timer
+    return it->first - now_time; 
+}
+
+int64_t EventPoller::getMinDelay() {
+    if (delay_task_map_.empty()) {
+        //No remaining timers
+        return -1;
+    }
+    auto it = delay_task_map_.begin();
+    uint64_t now = getCurrentMillisecond();
+    if (it->first > now) {
+        //All tasks have not expired
+        return it->first - now;
+    }
+    //执行已到期的任务并刷新休眠延时
+    return flushDelayTask(now);
+}
+
+
 inline void EventPoller::onPipeEvent(bool flush) {
     char buf[1024];
     int err = 0;
@@ -285,5 +484,8 @@ inline void EventPoller::onPipeEvent(bool flush) {
         }
     });
 }
+
+
+////////////////////////////////////////////////////////
 
 } // FFZKit
