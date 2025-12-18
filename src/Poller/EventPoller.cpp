@@ -80,6 +80,11 @@ size_t EventPoller::fdCount() const {
     return fd_count_;
 } 
 
+// static
+EventPoller::Ptr EventPoller::getCurrentPoller() {
+    return s_current_poller.lock();
+}
+
 thread::id EventPoller::getThreadId() const {
     return loop_thread_ ? loop_thread_->get_id() : thread::id();
 }
@@ -487,5 +492,39 @@ inline void EventPoller::onPipeEvent(bool flush) {
 
 
 ////////////////////////////////////////////////////////
+
+static size_t s_pool_size = 0;
+static bool s_enable_cpu_affinity = true;
+
+INSTANCE_IMP(EventPollerPool)
+
+EventPoller::Ptr EventPollerPool::getFirstPoller() {
+    return static_pointer_cast<EventPoller>(threads_.front());
+}
+
+EventPoller::Ptr EventPollerPool::getPoller(bool prefer_current_thread) {
+    auto poller = EventPoller::getCurrentPoller();
+    if(prefer_current_thread && prefer_current_thread_ && poller) {
+        return poller;
+    }
+    return static_pointer_cast<EventPoller>(getExecutor());
+}
+
+EventPollerPool::EventPollerPool() {
+    auto size = addPoller("event-poller", s_pool_size, ThreadPool::PRIORITY_HIGHEST, true, s_enable_cpu_affinity);
+    InfoL << "EventPoller created size: " << size;
+}
+
+void EventPollerPool::setPoolSize(size_t size) {
+    s_pool_size = size;
+}
+
+void EventPollerPool::enableCpuAffinity(bool enable) {
+    s_enable_cpu_affinity = enable;
+}
+
+void EventPollerPool::preferCurrentThread(bool flag) {
+    prefer_current_thread_ = flag;
+}
 
 } // FFZKit

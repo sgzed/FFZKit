@@ -34,6 +34,8 @@ namespace FFZKit {
 
 class EventPoller : public TaskExecutor, public std::enable_shared_from_this<EventPoller>  {
 public:
+    friend class TaskExecutorGetterImp;
+
     using Ptr = std::shared_ptr<EventPoller>;
     using PollEventCB = std::function<void(int event)>;
     using DelayTask = TaskCancelableImp<uint64_t(void)>;
@@ -93,6 +95,13 @@ public:
      * @return 可取消的任务标签
      */
     DelayTask::Ptr doDelayTask(uint64_t delay_ms, std::function<uint64_t()> task);
+
+
+     /**
+     * 获取当前线程关联的Poller实例
+     */
+    static EventPoller::Ptr getCurrentPoller();
+
 
      /**
      * 获取poller线程id
@@ -202,6 +211,51 @@ private:
      // 定时器相关 
     std::multimap<uint64_t, DelayTask::Ptr> delay_task_map_;
 };
+
+class EventPollerPool : public TaskExecutorGetterImp, public std::enable_shared_from_this<EventPollerPool> {
+public:
+    using Ptr = std::shared_ptr<EventPollerPool>;
+    static const std::string kOnStarted;
+
+    static EventPollerPool &Instance();
+
+     /**
+     * 设置EventPoller个数，在EventPollerPool单例创建前有效
+     * 在不调用此方法的情况下，默认创建thread::hardware_concurrency()个EventPoller实例
+     * @param size  EventPoller个数，如果为0则为thread::hardware_concurrency()
+     */
+    static void setPoolSize(size_t size = 0);
+
+     /**
+     * 内部创建线程是否设置cpu亲和性，默认设置cpu亲和性
+     */
+    static void enableCpuAffinity(bool enable);
+
+    EventPoller::Ptr getFirstPoller();
+
+     /**
+     * 根据负载情况获取轻负载的实例
+     * 如果优先返回当前线程，那么会返回当前线程
+     * 返回当前线程的目的是为了提高线程安全性
+     * @param prefer_current_thread 是否优先获取当前线程
+     */
+    EventPoller::Ptr getPoller(bool prefer_current_thread = true);
+
+    /**
+     * 设置 getPoller() 是否优先返回当前线程
+     * 在批量创建Socket对象时，如果优先返回当前线程，
+     * 那么将导致负载不够均衡，所以可以暂时关闭然后再开启
+     * @param flag 是否优先返回当前线程
+     */
+    void preferCurrentThread(bool flag = true);
+
+private:
+    EventPollerPool();
+
+private:
+    bool prefer_current_thread_ = true;
+};
+
 
 } // FFZKit
 

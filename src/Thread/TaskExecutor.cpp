@@ -200,6 +200,25 @@ size_t TaskExecutorGetterImp::getExecutorSize() const {
 size_t TaskExecutorGetterImp::addPoller(const string& name, size_t size, int priority, bool register_thread, bool enable_cpu_affinity) {
  	auto cpus = thread::hardware_concurrency();
     size = size > 0 ? size : cpus;
+
+	for(int i = 0; i < size; ++i) {
+		auto full_name = name +  "-" + to_string(i);
+		auto cpu_idx = i % cpus;
+		EventPoller::Ptr poller(new EventPoller(full_name));
+		poller->runLoop(false, register_thread);
+
+		poller->async([cpu_idx, enable_cpu_affinity, full_name, priority]() {
+			//Set thread priority
+			ThreadPool::setPriority((ThreadPool::Priority)priority);
+			setThreadName(full_name.data());
+			if (enable_cpu_affinity) {
+				setThreadAffinity(cpu_idx);
+			}
+		});
+
+		threads_.emplace_back(std::move(poller));
+	}
+
 	return size;
 }
 
