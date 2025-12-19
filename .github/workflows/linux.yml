@@ -2,72 +2,45 @@ name: Linux
 
 on: [push, pull_request]
 
+env:
+  # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
+  BUILD_TYPE: Release
+
 jobs:
   build:
 
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v3
 
-    - name: 下载 openssl
-      uses: actions/checkout@v3
-      with:
-        repository: openssl/openssl
-        fetch-depth: 1
-        ref: OpenSSL_1_1_1
-        path: openssl
+    - name: Create Build Environment
+      # Some projects don't allow in-source building, so create a separate build directory
+      # We'll use this as our working directory for all subsequent commands
+      run: cmake -E make_directory ${{github.workspace}}/build
 
-    - name: 启动 Docker 容器, 在Docker 容器中执行脚本
-      run: |
-        docker pull centos:7 
-        docker run -v $(pwd):/root -w /root --rm centos:7 sh -c "
-          #!/bin/bash
-          set -x
-      
-          # Backup original CentOS-Base.repo file
-          cp /etc/yum.repos.d/CentOS-Base.repo /etc/yum.repos.d/CentOS-Base.repo.backup
-      
-          # Define new repository configuration
-          cat <<EOF > /etc/yum.repos.d/CentOS-Base.repo
-        [base]
-        name=CentOS-7 - Base - mirrors.aliyun.com
-        baseurl=http://mirrors.aliyun.com/centos/7/os/x86_64/
-        gpgcheck=1
-        gpgkey=http://mirrors.aliyun.com/centos/RPM-GPG-KEY-CentOS-7
-      
-        [updates]
-        name=CentOS-7 - Updates - mirrors.aliyun.com
-        baseurl=http://mirrors.aliyun.com/centos/7/updates/x86_64/
-        gpgcheck=1
-        gpgkey=http://mirrors.aliyun.com/centos/RPM-GPG-KEY-CentOS-7
-        EOF
-      
-          # Clean yum cache and recreate it
-          yum clean all
-          yum makecache
-      
-          echo \"CentOS 7 软件源已成功切换\"
-          yum install -y git wget gcc gcc-c++ make
-        
-          mkdir -p /root/install
+    - name: Configure CMake
+      # Use a bash shell so we can use the same syntax for environment variable
+      # access regardless of the host operating system
+      shell: bash
+      working-directory: ${{github.workspace}}/build
+      # Note the current convention is to use the -S and -B options here to specify source 
+      # and build directories, but this is only available with CMake 3.13 and higher.  
+      # The CMake binaries on the Github Actions machines are (as of this writing) 3.12
+      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE
 
-          cd openssl
-          ./config no-shared --prefix=/root/install
-          make -j $(nproc)
-          make install
-          cd ../
-          
-          wget https://github.com/Kitware/CMake/releases/download/v3.29.5/cmake-3.29.5.tar.gz
-          tar -xf cmake-3.29.5.tar.gz
-          cd cmake-3.29.5
-          OPENSSL_ROOT_DIR=/root/install ./configure
-          make -j $(nproc)
-          make install
-          cd ..
-        
-          mkdir -p linux_build && cd linux_build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j $(nproc)
-        "
+    - name: Build
+      working-directory: ${{github.workspace}}/build
+      shell: bash
+      # Execute the build.  You can specify a specific target with "--target <NAME>"
+      run: cmake --build . --config $BUILD_TYPE -j $(nproc)
+
+    - name: Test
+      working-directory: ${{github.workspace}}/build
+      shell: bash
+      # Execute tests defined by the CMake configuration.  
+      # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
+      run: ctest -C $BUILD_TYPE
 
     - name: 设置环境变量
       run: |
