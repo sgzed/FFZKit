@@ -63,7 +63,7 @@ void EventPoller::addEventPipe() {
 EventPoller::EventPoller(string name) {
 #if defined(HAS_EPOLL) || defined(HAS_KQUEUE)
     event_fd_ = create_event();
-    if (event_fd_ == -1) {
+    if (event_fd_ == INVALID_EVENT_FD) {
         throw runtime_error(StrPrinter << "Create event fd failed: " << get_uv_errmsg());
     }
 #if !defined(_WIN32)
@@ -113,9 +113,9 @@ EventPoller::~EventPoller() {
     shutdown();
 
 #if defined(HAS_EPOLL) || defined(HAS_KQUEUE)
-    if (_event_fd != INVALID_EVENT_FD) {
-        close_event(_event_fd);
-        _event_fd = INVALID_EVENT_FD;
+    if (event_fd_ != INVALID_EVENT_FD) {
+        close_event(event_fd_);
+        event_fd_ = INVALID_EVENT_FD;
     }
 #endif // HAS_EPOLL
 
@@ -134,7 +134,7 @@ void EventPoller::runLoop(bool blocked, bool ref_self) {
 
 #if defined(HAS_EPOLL)
         struct epoll_event events[EPOLL_SIZE];
-        while (!_exit_flag) {
+        while (!exit_flag_) {
             minDelay = getMinDelay();
             startSleep(); // 用于统计当前线程负载情况
             int nfds = epoll_wait(event_fd_, events, EPOLL_SIZE, minDelay);

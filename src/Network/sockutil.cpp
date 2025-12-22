@@ -401,7 +401,7 @@ bool SockUtil::getDomainIP(const char *host, uint16_t port, struct sockaddr_stor
 
 static int set_ipv6_only(int fd, bool flag) {
     int opt = flag; 
-    int ret = setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, (const char*)opt, sizeof opt);
+    int ret = setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, (const char*)&opt, sizeof opt);
     if(ret == -1) {
         WarnL << "setsockopt IPV6_V6ONLY failed: " << get_uv_error(true);
     }
