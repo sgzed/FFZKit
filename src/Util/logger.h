@@ -102,6 +102,10 @@ public:
     LogContextCapture(Logger& logger, LogLevel level, const char *file, const char *function, int line,
                       const char *flag = "");
 
+    LogContextCapture(LogContextCapture &&that);
+    LogContextCapture(const LogContextCapture &that) = delete;
+    LogContextCapture &operator=(const LogContextCapture &that) = delete;
+
     ~LogContextCapture();
 
     /**

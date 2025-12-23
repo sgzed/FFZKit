@@ -240,13 +240,16 @@ int vasprintf(char **strp, const char *fmt, va_list ap) {
     static atomic<uint64_t> s_currentMillisecond_system(getCurrentMicrosecondOrigin() / 1000);
 
     static inline bool initMillisecondThread() {
-        static std::thread s_thread([]() {
+        auto running = make_shared<bool>(true);
+        auto lam = [running]() {
+            // 确该保线程退出前日志打印可用
+            auto logger = Logger::Instance().shared_from_this();
             setThreadName("stamp thread");
             DebugL << "Stamp thread started";
             uint64_t last = getCurrentMicrosecondOrigin();
             uint64_t now;
             uint64_t microsecond = 0;
-            while (true) {
+            while (*running) {
                 now = getCurrentMicrosecondOrigin();
                 //记录系统时间戳，可回退
                 s_currentMicrosecond_system.store(now, memory_order_relaxed);
@@ -266,9 +269,12 @@ int vasprintf(char **strp, const char *fmt, va_list ap) {
                 //Sleep for 0.5 ms
                 usleep(500);
             }
-        });
-        static OnceToken s_token([]() {
-            s_thread.detach();
+        };
+
+        static shared_ptr<thread> s_thread(new std::thread(lam), [running](std::thread *t) {
+            *running = false;
+            t->join();
+            delete t;
         });
         return true;
     }

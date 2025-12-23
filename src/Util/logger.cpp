@@ -156,6 +156,9 @@ LogContextCapture::LogContextCapture(Logger& logger, LogLevel level, const char 
 
 }
 
+LogContextCapture::LogContextCapture(LogContextCapture &&that) : _ctx(std::move(that._ctx)), _logger(that._logger) {
+}
+
 LogContextCapture::~LogContextCapture() {
     *this << endl;
 }
