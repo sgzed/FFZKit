@@ -8,6 +8,7 @@
 
 #include "Util/SpeedStatistic.h"
 #include "sockutil.h"
+#include "Poller/EventPoller.h"
 
 namespace FFZKit {
 
@@ -105,10 +106,128 @@ public:
         ::close(fd_);
     }
 
+    int rawFd() const {
+        return fd_;
+    }
+
+    SockType type() const {
+        return type_;
+    }
+
 private:
     int fd_; 
     SockType type_;
 }; 
+
+//socket文件描述符的包装
+//在析构时自动移除监听并close套接字，防止描述符溢
+
+class SockFD : public noncopyable {
+public:
+    using Ptr = std::shared_ptr<SockFD>;
+
+     /**
+     * 创建一个fd对象
+     * @param num 文件描述符，int数字
+     * @param poller 事件监听器
+     * Create an fd object
+     * @param num File descriptor, int number
+     * @param poller Event listener
+     */
+    SockFD(SockNum::Ptr num, EventPoller::Ptr poller)
+        : sock_num_(num), poller_(std::move(poller)) {}
+
+     /**
+     * 复制一个fd对象
+     * @param that 源对象
+     * @param poller 事件监听器
+     * Copy an fd object
+     * @param that Source object
+     * @param poller Event listener
+     */
+
+    SockFD(const SockFD &that, EventPoller::Ptr poller) {
+        sock_num_ = that.sock_num_;
+        poller_ = std::move(poller);
+        if(poller_ == that.poller_) {
+            throw std::invalid_argument("Copy a SockFD with same poller");
+        }
+    }
+
+    ~SockFD() {
+        delEvent();
+    }
+
+     /**
+     * 移除事件监听
+     * Remove event listener
+     */
+
+    void delEvent() {
+        if(poller_) {
+            auto num = sock_num_;
+            poller_->delEvent(num->rawFd(), [num](bool) {});
+            poller_ = nullptr;
+        }
+    }
+
+    int rawFd() const {
+        return sock_num_->rawFd();
+    } 
+
+    SockNum::SockType type() const {
+        return sock_num_->type();
+    }
+
+    const SockNum::Ptr &sockNum() const {
+        return sock_num_;
+    }
+
+    const EventPoller::Ptr& getPoller() const {
+        return poller_;
+    }
+
+private:
+    SockNum::Ptr sock_num_;
+    EventPoller::Ptr poller_;
+};
+
+class SockInfo {
+public:
+    SockInfo() = default;
+    virtual ~SockInfo() = default;
+
+    //获取本机ip  [AUTO-TRANSLATED:02d3901d]
+    //Get local IP
+    virtual std::string get_local_ip() = 0;
+    //获取本机端口号  [AUTO-TRANSLATED:f883cf62]
+    //Get local port number
+    virtual uint16_t get_local_port() = 0;
+    //获取对方ip  [AUTO-TRANSLATED:f042aa78]
+    //Get peer IP
+    virtual std::string get_peer_ip() = 0;
+    //获取对方端口号  [AUTO-TRANSLATED:0d085eca]
+    //Get the peer's port number
+    virtual uint16_t get_peer_port() = 0;
+    //获取标识符  [AUTO-TRANSLATED:e623608c]
+    //Get the identifier
+    virtual std::string getIdentifier() const { return ""; }
+};
+
+#define TraceP(ptr) TraceL << ptr->getIdentifier() << "(" << ptr->get_peer_ip() << ":" << ptr->get_peer_port() << ") "
+#define DebugP(ptr) DebugL << ptr->getIdentifier() << "(" << ptr->get_peer_ip() << ":" << ptr->get_peer_port() << ") "
+#define InfoP(ptr) InfoL << ptr->getIdentifier() << "(" << ptr->get_peer_ip() << ":" << ptr->get_peer_port() << ") "
+#define WarnP(ptr) WarnL << ptr->getIdentifier() << "(" << ptr->get_peer_ip() << ":" << ptr->get_peer_port() << ") "
+#define ErrorP(ptr) ErrorL << ptr->getIdentifier() << "(" << ptr->get_peer_ip() << ":" << ptr->get_peer_port() << ") "
+
+
+//异步IO Socket对象，包括tcp客户端、服务器和udp套接字
+class Socket : public std::enable_shared_from_this<Socket>, public SockInfo {
+public:
+    using Ptr = std::shared_ptr<Socket>;
+
+};
+
 
 }  // FFZKit
 
