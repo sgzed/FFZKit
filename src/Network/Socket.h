@@ -222,7 +222,7 @@ public:
 
 
 //异步IO Socket对象，包括tcp客户端、服务器和udp套接字
-class Socket : public std::enable_shared_from_this<Socket>, public SockInfo {
+class Socket : public std::enable_shared_from_this<Socket>, public noncopyable, public SockInfo {
 public:
     using Ptr = std::shared_ptr<Socket>;
 
